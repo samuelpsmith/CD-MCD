@@ -1,5 +1,5 @@
 # CD-MCD
-This project contains documentation for UNM's [Laboratory for Magneto-optical Spectroscopy](https://isco-op.unm.edu/centers/msl.html). Our current instrumentation includes broadband steady-state Circular Dichroism and Magnetic Circular Dichroism spectroscopy. This project contains documentation for these instruments and for the data processing scripts used to interpret the data. 
+This project contains documentation for instrumentation at UNM's [Laboratory for Magneto-optical Spectroscopy](https://isco-op.unm.edu/centers/msl.html). Our current instrumentation includes broadband steady-state Circular Dichroism and Magnetic Circular Dichroism spectroscopy. This project also contains documentation for the data processing scripts used to interpret the data. 
 
 ## MCD Instrument. 
 
