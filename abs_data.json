@@ -1,0 +1,10 @@
+{
+    "ZnTPFPP_1T_400-650_abs.csv": {
+        "concentration_mol_L": 0.00000716,
+        "pathlength_cm": 0.2
+    },
+    "ZnTPP_MCD_1T_abs.csv": {
+        "concentration_mol_L": 0.00000716,
+        "pathlength_cm": 0.2
+    }
+}
