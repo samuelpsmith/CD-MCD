@@ -1,5 +1,9 @@
 # CD-MCD
-Circular Dichroism and Magnetic Circular Dichroism Documentation
+This project contains documentation for UNM's [Laboratory for Magneto-optical Spectroscopy](https://isco-op.unm.edu/centers/msl.html). Our current instrumentation includes broadband steady-state Circular Dichroism and Magnetic Circular Dichroism spectroscopy. This project contains documentation for these instruments and for the data processing scripts used to interpret the data. 
+
+## MCD Instrument. 
+
+The Magnetic Circular Dichroism Spectrometer is a differential absorption spectrometer. We measure the difference in the absorption of left and right circularly polarized light. We can convert from MCD spectra to MORD spectra using the Kramers-Kronig relations. 
 
 Read the wiki for a detailed description of how to use the MCD instrument. 
 [Wiki Link](https://github.com/samuelpsmith/CD-MCD/wiki)
@@ -30,7 +34,7 @@ This script is designed to process Magnetic Circular Dichroism (MCD) and absorpt
 You can install the required packages using the following command:
 
 ```bash
-pip install pandas numpy matplotlib scipy
+pip install pandas numpy matplotlib scipy tk
 ```
 
 ### Configuration Files
