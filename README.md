@@ -64,11 +64,11 @@ The script uses two configuration files:
 
 ```json
 {
-  "ZnTPP_MCD_1T_abs.csv": {
+  "same_prefix_as_mcd1_abs.csv": {
     "concentration_mol_L": 0.01,
     "pathlength_cm": 1
   },
-  "ZnTPFPP_1T_400-650_abs.csv": {
+  "same_prefix_as_mcd2_abs.csv": {
     "concentration_mol_L": 0.005,
     "pathlength_cm": 1
   }
