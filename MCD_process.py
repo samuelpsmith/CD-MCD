@@ -44,27 +44,30 @@ def load_json(file_path: str) -> dict:
         raise
 
 def select_files() -> defaultdict:
-    """Opens a file dialog to select multiple files and tags each as positive, negative, or absorption.
+    """Opens a file dialog to select multiple files and tags each as positive, negative, absorption, or sticks.
     
     Returns:
         defaultdict: A dictionary of selected file paths tagged by type.
     """
     root = tk.Tk()
     root.withdraw()
-    file_paths = filedialog.askopenfilenames(title="Select CSV files for MCD and Absorption processing")
+    file_paths = filedialog.askopenfilenames(title="Select CSV files for MCD, Absorption, and Sticks processing")
     file_dict = defaultdict(dict)
     
     if file_paths:
         for file_path in file_paths:
-            base_name = os.path.basename(file_path)
+            base_name = os.path.splitext(os.path.basename(file_path))[0]  # This will strip the extension
             if re.search(r'pos', base_name, re.IGNORECASE):
                 file_dict[base_name.replace('pos', '', 1).replace('POS', '', 1)]['pos'] = file_path
             elif re.search(r'neg', base_name, re.IGNORECASE):
                 file_dict[base_name.replace('neg', '', 1).replace('NEG', '', 1)]['neg'] = file_path
             elif re.search(r'abs', base_name, re.IGNORECASE):
                 file_dict[base_name.replace('abs', '', 1).replace('ABS', '', 1)]['abs'] = file_path
+            elif re.search(r'sticks', base_name, re.IGNORECASE):
+                file_dict[base_name.replace('sticks', '', 1).replace('STICKS', '', 1)]['sticks'] = file_path
             else:
-                messagebox.showerror("File Naming Error", f"File {base_name} does not contain 'pos', 'neg', or 'abs'. Please rename the file accordingly.")
+                messagebox.showerror("File Naming Error", f"File {base_name} does not contain 'pos', 'neg', 'abs', or 'sticks'. Please rename the file accordingly.")
+
     return file_dict
 
 def create_output_directory(base_path: str) -> str:
@@ -247,7 +250,7 @@ def scale_sticks(sticks_df: pd.DataFrame, max_absorbance: float, scale_factor: f
     return sticks_df
 
 
-def plot_data(mcd_df: pd.DataFrame, abs_df: pd.DataFrame, mord_df: pd.DataFrame, config: dict, sticks_df: pd.DataFrame = None):
+def plot_data(base_name, mcd_df: pd.DataFrame, abs_df: pd.DataFrame, mord_df: pd.DataFrame, config: dict, sticks_df: pd.DataFrame = None,):
     """Plots the MCD, Absorption, and MORD data on a single figure with three stacked graphs.
     
     Optionally plots the derivatives of the absorption spectrum and sticks.
@@ -285,17 +288,18 @@ def plot_data(mcd_df: pd.DataFrame, abs_df: pd.DataFrame, mord_df: pd.DataFrame,
     abs_boxcar = abs_spec.rolling(window=config['window_size'], center=True).mean().fillna(abs_spec)
     abs_X_, abs_Y_ = interpolate_data(abs_df['wavelength'], abs_boxcar, config['spline_points'])
     
-    ax1.plot(abs_df['wavelength'], abs_spec, label='Extinction', marker='o', linestyle='-', color='blue')
+    ax1.plot(abs_df['wavelength'], abs_spec, label='Extinction', marker=' ', linestyle='-', color='blue')
     if config['plot_rolling_avg']:
         ax1.plot(abs_df['wavelength'], abs_boxcar, label='Extinction Boxcar Averaged', marker='x', linestyle='--', color='red')
     if config['plot_spline']:
         ax1.plot(abs_X_, abs_Y_, label='Extinction Spline Interpolation', linestyle='-', color='green')
     
     ax1.set_ylabel(r'Molar Extinction, $\epsilon$')
-    ax1.grid(True)
+    ax1.grid(False)
+    ax1.axhline(y = 0, color = 'dimgrey', linestyle = '-') 
     #Turning off the legend and title because it is cleaner. 
     #ax1.legend()
-    #ax1.set_title('Absorption Data')
+    ax1.set_title(f'{base_name[:-1]}')
 
     if sticks_df is not None:
         # Exclude sticks outside the absorption range
@@ -311,11 +315,11 @@ def plot_data(mcd_df: pd.DataFrame, abs_df: pd.DataFrame, mord_df: pd.DataFrame,
         primary_ylim = ax1.get_ylim()
         ax1_sticks.set_ylim(primary_ylim)
         
-        ax1_sticks.set_ylabel('Scaled Dipole Strength')
+        ax1_sticks.set_ylabel('Scaled Dipole Strength, Extinction')
 
     # Plot MCD data
     if config['plot_original']:
-        ax2.plot(mcd_df['wavelength'], mcd_spec, label=r'Measured MCD $\Delta \epsilon / T$', marker='o', linestyle='-', color='blue')
+        ax2.plot(mcd_df['wavelength'], mcd_spec, label=r'Measured MCD $\Delta \epsilon / T$', marker=' ', linestyle='-', color='blue')
     if config['plot_rolling_avg']:
         ax2.plot(mcd_df['wavelength'], mcd_boxcar, label='Rolling Averaged R_signed_extinction', marker='x', linestyle='--', color='red')
     if config['plot_spline']:
@@ -323,7 +327,8 @@ def plot_data(mcd_df: pd.DataFrame, abs_df: pd.DataFrame, mord_df: pd.DataFrame,
     if config['plot_error_bars']:
         ax2.errorbar(mcd_df['wavelength'], mcd_spec, yerr=mcd_df['std_dev'], fmt='o', label='Error bars', ecolor='gray', alpha=0.5)
     ax2.set_ylabel(r'MCD, $\Delta \epsilon / T$')
-    ax2.grid(True)
+    ax2.grid(False)
+    ax2.axhline(y = 0, color = 'dimgrey', linestyle = '-') 
     #ax2.legend()
     #ax2.set_title('MCD Data')
 
@@ -338,7 +343,7 @@ def plot_data(mcd_df: pd.DataFrame, abs_df: pd.DataFrame, mord_df: pd.DataFrame,
     mord_X_, mord_Y_ = interpolate_data(mord_df['wavelength'], mord_boxcar, config['spline_points'])
     
     if config['plot_original']:
-        ax3.plot(mord_df['wavelength'], mord_spec, label='Measured MORD', marker='o', linestyle='-', color='blue')
+        ax3.plot(mord_df['wavelength'], mord_spec, label='Measured MORD', marker=' ', linestyle='-', color='blue')
     if config['plot_rolling_avg']:
         ax3.plot(mord_df['wavelength'], mord_boxcar, label='Rolling Averaged MORD', marker='x', linestyle='--', color='red')
     if config['plot_spline']:
@@ -346,8 +351,9 @@ def plot_data(mcd_df: pd.DataFrame, abs_df: pd.DataFrame, mord_df: pd.DataFrame,
     if config['plot_error_bars']:
         ax3.errorbar(mord_df['wavelength'], mord_spec, yerr=mord_df['std_dev'], fmt='o', label='Error bars', ecolor='gray', alpha=0.5)
     ax3.set_xlabel('Wavelength (nm)')
-    ax3.set_ylabel(r'MORD, $\Delta \Theta / M * m * T$')
-    ax3.grid(True)
+    ax3.set_ylabel(r'MORD, $\Theta / M * m * T$')
+    ax3.grid(False)
+    ax3.axhline(y = 0, color = 'dimgrey', linestyle = '-') 
     #ax3.legend()
     #ax3.set_title('MORD Data')
 
@@ -394,25 +400,26 @@ def process_files(file_dict: defaultdict, config: dict, abs_data: dict):
         config (dict): The configuration dictionary.
         abs_data (dict): The absorbance data dictionary.
     """
-    
     column_names_pos = ['wavelength', 'x_pos', 'y_pos', 'R', 'theta', 'std_dev_x', 'std_dev_y', 'additional']
     column_names_neg = ['wavelength', 'x_neg', 'y_neg', 'R', 'theta', 'std_dev_x', 'std_dev_y', 'additional']
     column_names_abs = ['wavelength', 'intensity']
+    column_names_sticks = ['wavelength', 'strength']
 
     for base_name, files in file_dict.items():
         if 'pos' in files and 'neg' in files and 'abs' in files:
             pos_file = files['pos']
             neg_file = files['neg']
             abs_file = files['abs']
-            logging.info(f"Processing files: {pos_file}, {neg_file}, and {abs_file}")
+            sticks_file = files.get('sticks', None)
+            logging.info(f"Processing files: {pos_file}, {neg_file}, {abs_file}, and {sticks_file}")
 
             positive_df = read_csv_file(pos_file, column_names_pos)
             negative_df = read_csv_file(neg_file, column_names_neg)
             abs_df = read_csv_file(abs_file, column_names_abs)
+            sticks_df = read_csv_file(sticks_file, column_names_sticks) if sticks_file else None
 
             if positive_df is not None and negative_df is not None and abs_df is not None:
                 try:
-                    # Make a copy of abs_df to avoid modifying the original data
                     abs_df_copy = abs_df.copy()
 
                     if config['convert_to_extinction']:
@@ -420,14 +427,12 @@ def process_files(file_dict: defaultdict, config: dict, abs_data: dict):
                     
                     x_diff, y_diff, x_stdev, y_stdev, R_signed, R_stdev = calculate_differences(positive_df, negative_df)
                     
-                    # Create a DataFrame for the MCD data
                     mcd_df = pd.DataFrame({
                         'wavelength': positive_df['wavelength'],
                         'R_signed': R_signed,
                         'std_dev': R_stdev
                     })
 
-                    # Convert R_signed to extinction units
                     if config['convert_to_extinction']:
                         mcd_df = convert_abs_to_extinction(mcd_df, os.path.basename(abs_file), abs_data, column='R_signed')
 
@@ -435,7 +440,6 @@ def process_files(file_dict: defaultdict, config: dict, abs_data: dict):
 
                     wavenumber_cm1 = 1e7 / mcd_df['wavelength'].values
                     mord_spectrum = kk_arbspace(wavenumber_cm1, mcd_df['R_signed_extinction'].values, alpha=0)
-                    # alpha is zero because we are calculating the zero-order spectral moment. 
                     
                     mord_df = pd.DataFrame({
                         'wavelength': mcd_df['wavelength'],
@@ -447,17 +451,11 @@ def process_files(file_dict: defaultdict, config: dict, abs_data: dict):
                     output_dir = create_output_directory(base_path)
                     output_file_path = os.path.join(output_dir, base_name + '_processed.csv')
 
-                    sticks_df = None
-                    if config['plot_sticks']:
-                        sticks_file = filedialog.askopenfilename(title="Select sticks file for Absorption")
-                        if sticks_file:
-                            sticks_df = read_csv_file(sticks_file, column_names=['wavelength', 'strength'])
-
-                    plot_data(mcd_df, abs_df_copy, mord_df, config, sticks_df)
+                    plot_data(base_name, mcd_df, abs_df_copy, mord_df, config, sticks_df)
 
                     save_data(output_file_path, mcd_df['wavelength'], mcd_df['R_signed'], R_signed_averaged_filled, R_stdev)
                 except Exception as e:
-                    logging.error(f"Error processing files {pos_file}, {neg_file}, and {abs_file}: {e}")
+                    logging.error(f"Error processing files {pos_file}, {neg_file}, {abs_file}, and {sticks_file}: {e}")
                     messagebox.showerror("Processing Error", f"An error occurred: {e}")
             else:
                 logging.error(f"One or more DataFrames for files {pos_file}, {neg_file}, and {abs_file} are None")
@@ -465,6 +463,7 @@ def process_files(file_dict: defaultdict, config: dict, abs_data: dict):
             missing_types = [ftype for ftype in ['pos', 'neg', 'abs'] if ftype not in files]
             logging.error(f"Missing {', '.join(missing_types)} file(s) for base name {base_name}")
             messagebox.showerror("File Pairing Error", f"Missing {', '.join(missing_types)} file(s) for base name {base_name}")
+
 
 def main():
     """Main function to load configuration, select files, and process the data."""
