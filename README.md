@@ -37,6 +37,11 @@ You can install the required packages using the following command:
 pip install pandas numpy matplotlib scipy tk
 ```
 
+If you are on windows, you may need to use the following command to install pip after installing python from the windows store:
+```bash
+python -m ensurepip --upgrade
+```
+
 ### Configuration Files
 
 The script uses two configuration files:
