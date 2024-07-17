@@ -95,13 +95,13 @@ def read_csv_file(filename: str, column_names: list = None) -> pd.DataFrame:
     Returns:
         pd.DataFrame: The DataFrame containing the CSV data.
     """
-
     try:
         if column_names:
             df = pd.read_csv(filename, names=column_names)
         else:
             df = pd.read_csv(filename)
-        logging.info(f"Read file {filename} successfully")
+        df = df.sort_values(by='wavelength').reset_index(drop=True)  # Ensure the data is sorted by wavelength
+        logging.info(f"Read and sorted file {filename} successfully")
         return df
     except FileNotFoundError:
         logging.error(f"File not found: {filename}")
@@ -112,25 +112,6 @@ def read_csv_file(filename: str, column_names: list = None) -> pd.DataFrame:
     except Exception as e:
         logging.error(f"Unexpected error: {e}")
     return None
-
-def calculate_differences(positive_df: pd.DataFrame, negative_df: pd.DataFrame) -> tuple:
-    """Calculates differences and standard deviations between positive and negative controlled data.
-    
-    Args:
-        positive_df (pd.DataFrame): The DataFrame with positive voltage controlled field data. The field is co-incident with the propagation direction of the beam of light. 
-        negative_df (pd.DataFrame): The DataFrame with negative voltage controlled field data. The field is anti-parellel to the propagation direction of the beam of light.  
-        
-    Returns:
-        tuple: A tuple containing x_diff, y_diff, x_stdev, y_stdev, R_signed, R_stdev.
-    """
-    x_diff = (positive_df['x_pos'] - negative_df['x_neg']) / 2
-    y_diff = (positive_df['y_pos'] - negative_df['y_neg']) / 2
-    x_stdev = np.sqrt(2 * ((positive_df['std_dev_x'] ** 2) + (negative_df['std_dev_x'] ** 2)))
-    y_stdev = np.sqrt(2 * ((positive_df['std_dev_y'] ** 2) + (negative_df['std_dev_y'] ** 2)))
-    R = np.sqrt(x_diff ** 2 + y_diff ** 2)
-    R_stdev = np.sqrt(((x_diff * x_stdev / R) ** 2) + ((y_diff * y_stdev / R) ** 2))
-    R_signed = R * np.sign(y_diff)
-    return x_diff, y_diff, x_stdev, y_stdev, R_signed, R_stdev
 
 def interpolate_data(wavelength: pd.Series, R_signed: pd.Series, spline_points: int) -> tuple:
     """Interpolates data for smoother plotting.
