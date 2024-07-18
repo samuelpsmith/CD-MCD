@@ -1,10 +1,34 @@
 {
-    "ZnTPFPP_1T_400-650_abs.csv": {
-        "concentration_mol_L": 0.00000716,
+    "ZnCis_abs.csv": {
+        "concentration_mol_L": 0.0000109,
         "pathlength_cm": 0.2
     },
-    "ZnTPP_MCD_1T_abs.csv": {
-        "concentration_mol_L": 0.00000716,
+    "ZnTrans_abs.csv": {
+        "concentration_mol_L": 0.00001264,
+        "pathlength_cm": 0.2
+    },
+    "NiCis_abs.csv": {
+        "concentration_mol_L": 0.00003069,
+        "pathlength_cm": 0.2
+    },
+    "NiTrans_abs.csv": {
+        "concentration_mol_L": 0.0000212,
+        "pathlength_cm": 0.2
+    },
+    "PdCis_abs.csv": {
+        "concentration_mol_L": 0.0000159,
+        "pathlength_cm": 0.2
+    },
+    "PdTrans_abs.csv": {
+        "concentration_mol_L": 0.0000119,
+        "pathlength_cm": 0.2
+    },
+    "PtCis_abs.csv": {
+        "concentration_mol_L": 0.0000181,
+        "pathlength_cm": 0.2
+    },
+    "PtTrans_abs.csv": {
+        "concentration_mol_L": 0.0000117,
         "pathlength_cm": 0.2
     }
 }

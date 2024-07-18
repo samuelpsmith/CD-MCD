@@ -113,6 +113,25 @@ def read_csv_file(filename: str, column_names: list = None) -> pd.DataFrame:
         logging.error(f"Unexpected error: {e}")
     return None
 
+def calculate_differences(positive_df: pd.DataFrame, negative_df: pd.DataFrame) -> tuple:
+    """Calculates differences and standard deviations between positive and negative field data.
+    
+    Args:
+        positive_df (pd.DataFrame): The DataFrame with positive field data.
+        negative_df (pd.DataFrame): The DataFrame with negative field data.
+        
+    Returns:
+        tuple: A tuple containing x_diff, y_diff, x_stdev, y_stdev, R_signed, R_stdev.
+    """
+    x_diff = (positive_df['x_pos'] - negative_df['x_neg']) / 2
+    y_diff = (positive_df['y_pos'] - negative_df['y_neg']) / 2
+    x_stdev = np.sqrt(2 * ((positive_df['std_dev_x'] ** 2) + (negative_df['std_dev_x'] ** 2)))
+    y_stdev = np.sqrt(2 * ((positive_df['std_dev_y'] ** 2) + (negative_df['std_dev_y'] ** 2)))
+    R = np.sqrt(x_diff ** 2 + y_diff ** 2)
+    R_stdev = np.sqrt(((x_diff * x_stdev / R) ** 2) + ((y_diff * y_stdev / R) ** 2))
+    R_signed = R * np.sign(y_diff)
+    return x_diff, y_diff, x_stdev, y_stdev, R_signed, R_stdev
+
 def interpolate_data(wavelength: pd.Series, R_signed: pd.Series, spline_points: int) -> tuple:
     """Interpolates data for smoother plotting.
     
@@ -191,14 +210,14 @@ def kk_arbspace(omega: np.ndarray, imchi: np.ndarray, alpha: int) -> np.ndarray:
     
     return rechi.flatten()
 
-def convert_abs_to_extinction(df: pd.DataFrame, filename: str, abs_data: dict, column: str = 'intensity') -> pd.DataFrame:
-    """Converts absorbance to extinction using pathlength and concentration.
+def convert_abs_to_extinction(df: pd.DataFrame, filename: str, abs_data: dict, columns: list) -> pd.DataFrame:
+    """Converts absorbance to extinction using pathlength and concentration for specified columns.
     
     Args:
         df (pd.DataFrame): The DataFrame containing the data.
         filename (str): The name of the file.
         abs_data (dict): The absorbance data dictionary.
-        column (str, optional): The name of the column to convert. Defaults to 'intensity'.
+        columns (list): The list of column names to convert.
         
     Returns:
         pd.DataFrame: The DataFrame with the converted extinction data.
@@ -207,8 +226,9 @@ def convert_abs_to_extinction(df: pd.DataFrame, filename: str, abs_data: dict, c
     if filename in abs_data:
         concentration = abs_data[filename]['concentration_mol_L']
         pathlength = abs_data[filename]['pathlength_cm']
-        df[f'{column}_extinction'] = df[column] / (concentration * pathlength)
-        logging.info(f"Converted {column} to extinction for {filename}")
+        for column in columns:
+            df[f'{column}_extinction'] = df[column] / (concentration * pathlength)
+        logging.info(f"Converted {columns} to extinction for {filename}")
     else:
         logging.warning(f"No absorbance data found for {filename}, conversion skipped")
     return df
@@ -231,12 +251,13 @@ def scale_sticks(sticks_df: pd.DataFrame, max_absorbance: float, scale_factor: f
     return sticks_df
 
 
-def plot_data(base_name, mcd_df: pd.DataFrame, abs_df: pd.DataFrame, mord_df: pd.DataFrame, config: dict, sticks_df: pd.DataFrame = None,):
+def plot_data(base_name, mcd_df: pd.DataFrame, abs_df: pd.DataFrame, mord_df: pd.DataFrame, config: dict, sticks_df: pd.DataFrame = None):
     """Plots the MCD, Absorption, and MORD data on a single figure with three stacked graphs.
     
     Optionally plots the derivatives of the absorption spectrum and sticks.
     
     Args:
+        base_name (str): The base name of the file set.
         mcd_df (pd.DataFrame): The DataFrame with MCD data.
         abs_df (pd.DataFrame): The DataFrame with Absorption data.
         mord_df (pd.DataFrame): The DataFrame with MORD data.
@@ -244,9 +265,14 @@ def plot_data(base_name, mcd_df: pd.DataFrame, abs_df: pd.DataFrame, mord_df: pd
         sticks_df (pd.DataFrame, optional): The DataFrame with sticks data. Defaults to None.
     """
 
+    # Ensure 'wavelength' column is numeric
+    abs_df['wavelength'] = pd.to_numeric(abs_df['wavelength'], errors='coerce')
+    mord_df['wavelength'] = pd.to_numeric(mord_df['wavelength'], errors='coerce')
+
+    # Filter data based on the wavelength range in mcd_df
     abs_df = abs_df[(abs_df['wavelength'] >= mcd_df['wavelength'].min()) & (abs_df['wavelength'] <= mcd_df['wavelength'].max())]
     mord_df = mord_df[(mord_df['wavelength'] >= mcd_df['wavelength'].min()) & (mord_df['wavelength'] <= mcd_df['wavelength'].max())]
-    
+
     mcd_df = mcd_df.dropna(subset=['wavelength', 'R_signed_extinction']).replace([np.inf, -np.inf], np.nan).dropna()
     if len(mcd_df) == 0:
         logging.error("No valid MCD data")
@@ -260,7 +286,7 @@ def plot_data(base_name, mcd_df: pd.DataFrame, abs_df: pd.DataFrame, mord_df: pd
     fig.subplots_adjust(hspace=0)
 
     # Plot Absorption data
-    abs_df = abs_df.dropna(subset=['wavelength', 'intensity_extinction']).replace([np.inf, -np.inf], np.nan).dropna() #Should this plot extinction? 
+    abs_df = abs_df.dropna(subset=['wavelength', 'intensity_extinction']).replace([np.inf, -np.inf], np.nan).dropna()
     if len(abs_df) == 0:
         logging.error("No valid Absorption data")
         return
@@ -277,28 +303,22 @@ def plot_data(base_name, mcd_df: pd.DataFrame, abs_df: pd.DataFrame, mord_df: pd
     
     ax1.set_ylabel(r'Molar Extinction, $\epsilon$')
     ax1.grid(False)
-    ax1.axhline(y = 0, color = 'dimgrey', linestyle = '-') 
-    #Turning off the legend and title because it is cleaner. 
-    #ax1.legend()
+    ax1.axhline(y=0, color='dimgrey', linestyle='-')
     ax1.set_title(f'{base_name[:-1]}')
 
     if sticks_df is not None:
-        # Exclude sticks outside the absorption range
         sticks_df = sticks_df[(sticks_df['wavelength'] >= abs_df['wavelength'].min()) & (sticks_df['wavelength'] <= abs_df['wavelength'].max())]
         max_absorbance = abs_spec.max()
         sticks_df = scale_sticks(sticks_df, max_absorbance)
-        ax1_sticks = ax1.twinx()  # Create a secondary y-axis for sticks
+        ax1_sticks = ax1.twinx()
         
         for _, row in sticks_df.iterrows():
             ax1_sticks.plot([row['wavelength'], row['wavelength']], [0, row['scaled_strength']], linestyle='-', color='black')
         
-        # Set the secondary y-axis limits to match the primary y-axis limits
         primary_ylim = ax1.get_ylim()
         ax1_sticks.set_ylim(primary_ylim)
-        
         ax1_sticks.set_ylabel('Scaled Dipole Strength, Extinction')
 
-    # Plot MCD data
     if config['plot_original']:
         ax2.plot(mcd_df['wavelength'], mcd_spec, label=r'Measured MCD $\Delta \epsilon / T$', marker=' ', linestyle='-', color='blue')
     if config['plot_rolling_avg']:
@@ -306,14 +326,11 @@ def plot_data(base_name, mcd_df: pd.DataFrame, abs_df: pd.DataFrame, mord_df: pd
     if config['plot_spline']:
         ax2.plot(mcd_X_, mcd_Y_, label='Spline Interpolation R_signed_extinction', linestyle='-', color='green')
     if config['plot_error_bars']:
-        ax2.errorbar(mcd_df['wavelength'], mcd_spec, yerr=mcd_df['std_dev'], fmt='o', label='Error bars', ecolor='gray', alpha=0.5)
+        ax2.errorbar(mcd_df['wavelength'], mcd_spec, yerr=mcd_df['std_dev_extinction'], fmt='o', label='Error bars', ecolor='gray', alpha=0.5)
     ax2.set_ylabel(r'MCD, $\Delta \epsilon / T$')
     ax2.grid(False)
-    ax2.axhline(y = 0, color = 'dimgrey', linestyle = '-') 
-    #ax2.legend()
-    #ax2.set_title('MCD Data')
+    ax2.axhline(y=0, color='dimgrey', linestyle='-')
 
-    # Plot MORD data
     mord_df = mord_df.dropna(subset=['wavelength', 'mord']).replace([np.inf, -np.inf], np.nan).dropna()
     if len(mord_df) == 0:
         logging.error("No valid MORD data")
@@ -334,9 +351,7 @@ def plot_data(base_name, mcd_df: pd.DataFrame, abs_df: pd.DataFrame, mord_df: pd
     ax3.set_xlabel('Wavelength (nm)')
     ax3.set_ylabel(r'MORD, $\Theta / M * m * T$')
     ax3.grid(False)
-    ax3.axhline(y = 0, color = 'dimgrey', linestyle = '-') 
-    #ax3.legend()
-    #ax3.set_title('MORD Data')
+    ax3.axhline(y=0, color='dimgrey', linestyle='-')
 
     if config['plot_derivative']:
         abs_df['intensity_derivative'] = np.gradient(abs_df['intensity'], abs_df['wavelength'])
@@ -351,6 +366,8 @@ def plot_data(base_name, mcd_df: pd.DataFrame, abs_df: pd.DataFrame, mord_df: pd
     
     plt.show()
     plt.close(fig)  # Close the figure to ensure it does not persist in the next iteration
+
+
 
 
 def save_data(output_file_path: str, wavelength: pd.Series, R_signed: pd.Series, R_signed_averaged_filled: pd.Series, R_stdev: pd.Series):
@@ -404,7 +421,7 @@ def process_files(file_dict: defaultdict, config: dict, abs_data: dict):
                     abs_df_copy = abs_df.copy()
 
                     if config['convert_to_extinction']:
-                        abs_df_copy = convert_abs_to_extinction(abs_df_copy, os.path.basename(abs_file), abs_data)
+                        abs_df_copy = convert_abs_to_extinction(abs_df_copy, os.path.basename(abs_file), abs_data, ['intensity'])
                     
                     x_diff, y_diff, x_stdev, y_stdev, R_signed, R_stdev = calculate_differences(positive_df, negative_df)
                     
@@ -415,7 +432,7 @@ def process_files(file_dict: defaultdict, config: dict, abs_data: dict):
                     })
 
                     if config['convert_to_extinction']:
-                        mcd_df = convert_abs_to_extinction(mcd_df, os.path.basename(abs_file), abs_data, column='R_signed')
+                        mcd_df = convert_abs_to_extinction(mcd_df, os.path.basename(abs_file), abs_data, ['R_signed', 'std_dev'])
 
                     R_signed_averaged_filled = mcd_df['R_signed_extinction'].rolling(window=3, center=True).mean().fillna(mcd_df['R_signed_extinction'])
 
@@ -425,7 +442,7 @@ def process_files(file_dict: defaultdict, config: dict, abs_data: dict):
                     mord_df = pd.DataFrame({
                         'wavelength': mcd_df['wavelength'],
                         'mord': mord_spectrum,
-                        'std_dev': R_stdev  # Assuming same std_dev for MORD
+                        'std_dev': mcd_df['std_dev_extinction']  # Using converted std_dev for MORD
                     })
 
                     base_path = os.path.dirname(pos_file)
@@ -434,12 +451,12 @@ def process_files(file_dict: defaultdict, config: dict, abs_data: dict):
 
                     plot_data(base_name, mcd_df, abs_df_copy, mord_df, config, sticks_df)
 
-                    save_data(output_file_path, mcd_df['wavelength'], mcd_df['R_signed'], R_signed_averaged_filled, R_stdev)
+                    save_data(output_file_path, mcd_df['wavelength'], mcd_df['R_signed_extinction'], R_signed_averaged_filled, mcd_df['std_dev_extinction'])
                 except Exception as e:
                     logging.error(f"Error processing files {pos_file}, {neg_file}, {abs_file}, and {sticks_file}: {e}")
                     messagebox.showerror("Processing Error", f"An error occurred: {e}")
             else:
-                logging.error(f"One or more DataFrames for files {pos_file}, {neg_file}, and {abs_file} are None")
+                logging.error(f"One or more DataFrames for files {pos_file}, {neg_file}, {abs_file} are None")
         else:
             missing_types = [ftype for ftype in ['pos', 'neg', 'abs'] if ftype not in files]
             logging.error(f"Missing {', '.join(missing_types)} file(s) for base name {base_name}")

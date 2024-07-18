@@ -1,4 +1,4 @@
-{
+ {
     "plot_derivative": true,
     "plot_original": true,
     "plot_rolling_avg": false,
@@ -7,5 +7,5 @@
     "spline_points": 500,
     "convert_to_extinction": true,
     "plot_sticks": true,
-    "plot_error_bars": false
+    "plot_error_bars": true
 }
