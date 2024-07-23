@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import make_interp_spline
+from scipy.signal import find_peaks
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import logging
@@ -250,8 +251,140 @@ def scale_sticks(sticks_df: pd.DataFrame, max_absorbance: float, scale_factor: f
     sticks_df['scaled_strength'] = sticks_df['strength'] / sticks_df['strength'].max() * max_absorbance * scale_factor
     return sticks_df
 
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy.optimize import curve_fit
+from scipy.signal import find_peaks, peak_widths
 
-def plot_data(base_name, mcd_df: pd.DataFrame, abs_df: pd.DataFrame, mord_df: pd.DataFrame, config: dict, sticks_df: pd.DataFrame = None):
+# Define the first derivative of the Gaussian function
+def gaussian_derivative_wavenumber(k, amplitude, mean, stddev):
+    return amplitude * (k - mean) / (stddev ** 2) * np.exp(-((k - mean) ** 2) / (2 * stddev ** 2))
+
+def pick_peaks(df, column='abs', height_percent=1):
+    """Picks the peaks of the absorption data.
+    
+    Args:
+        df (pd.DataFrame): The DataFrame containing the absorption data.
+        column (str, optional): The column to pick peaks from. Defaults to 'abs'.
+        height_percent (float, optional): The minimum height of a peak as a percentage of the maximum value.
+        
+    Returns:
+        tuple: Arrays of peak indices, peak wavelengths and peak intensities.
+    """
+    height = df[column].max() * (height_percent / 100)
+    peaks, _ = find_peaks(df[column], height=height, prominence=0.25 * height)
+    peak_wavelengths = df.iloc[peaks]['wavelength'].values
+    peak_intensities = df.iloc[peaks][column].values
+    print(f"Peak wavelengths: {peak_wavelengths}")
+    return peaks, peak_wavelengths, peak_intensities
+
+def find_local_maxima_within_range(x_data, y_data, center, sigma):
+    """Finds the local maximum of the y_data within 6 sigma range around the center.
+    
+    Args:
+        x_data (np.ndarray): The x-axis data.
+        y_data (np.ndarray): The y-axis data.
+        center (float): The center value.
+        sigma (float): The sigma value.
+        
+    Returns:
+        tuple: The x and y values of the local maximum.
+    """
+    lower_bound = max(center - 3 * sigma, x_data.min())
+    upper_bound = min(center + 3 * sigma, x_data.max())
+    
+    fitting_range = (x_data >= lower_bound) & (x_data <= upper_bound)
+    
+    if np.any(fitting_range):
+        local_max_index = np.argmax(y_data[fitting_range])
+        local_max_x = x_data[fitting_range][local_max_index]
+        local_max_y = y_data[fitting_range][local_max_index]
+        return local_max_x, local_max_y
+    return center, 0
+
+def fit_peak(x_data, y_data, initial_guess):
+    """Fit the peak using the gaussian_derivative_wavenumber function.
+    
+    Args:
+        x_data (np.ndarray): The x-axis data (wavenumber).
+        y_data (np.ndarray): The y-axis data.
+        initial_guess (list): The initial guess for the fitting parameters.
+        
+    Returns:
+        np.ndarray: The fitted parameters.
+    """
+    try:
+        popt, pcov = curve_fit(gaussian_derivative_wavenumber, x_data, y_data, p0=initial_guess)
+        return popt
+    except Exception as e:
+        print(f"An error occurred during fitting for initial guess {initial_guess}: {e}")
+        try:
+            # Try fitting with the opposite sign of the amplitude
+            initial_guess[0] = -initial_guess[0]
+            popt, pcov = curve_fit(gaussian_derivative_wavenumber, x_data, y_data, p0=initial_guess)
+            return popt
+        except Exception as e:
+            print(f"An error occurred during fitting with opposite sign for initial guess {initial_guess}: {e}")
+            return None
+
+def fit_peaks_separately(df, column='abs', height_percent=1):
+    """Fit peaks separately using the gaussian_derivative_wavenumber function.
+    
+    Args:
+        df (pd.DataFrame): The DataFrame containing the absorption data.
+        column (str, optional): The column to pick peaks from. Defaults to 'abs'.
+        height_percent (float, optional): The minimum height of a peak as a percentage of the maximum value.
+        
+    Returns:
+        list: Fitted parameters for each peak.
+    """
+    peaks, peak_wavelengths, peak_intensities = pick_peaks(df, column=column, height_percent=height_percent)
+    
+    # Convert wavelength to wavenumber
+    df['wavenumber'] = 1e7 / df['wavelength']
+    
+    fitted_params = []
+    for peak_index in peaks:
+        peak_wavelength = df.iloc[peak_index]['wavelength']
+        sigma = (peak_widths(df[column], [peak_index], rel_height=0.5)[0][0]) / (2 * np.sqrt(2 * np.log(2)))
+        peak_wavenumber = 1e7 / peak_wavelength
+        peak_intensity = df.iloc[peak_index][column]
+        
+        # Find local maxima for MCD
+        local_max_x, local_max_y = find_local_maxima_within_range(df['wavenumber'], df[column], peak_wavenumber, sigma)
+        
+        initial_guess = [local_max_y, local_max_x, sigma]
+        popt = fit_peak(df['wavenumber'], df[column], initial_guess)
+        
+        if popt is not None:
+            fitted_params.append(popt)
+    
+    return fitted_params
+
+
+
+def pick_peaks(df, column='intensity_extinction', height_percent=1):
+    """Picks the peaks of the absorption data.
+
+    
+    Args:
+        df (pd.DataFrame): The DataFrame containing the absorption data.
+        column (str, optional): The column to pick peaks from. Defaults to 'intensity_extinction'.
+        
+    Returns:
+        np.ndarray: Array of peak wavelengths.
+    """
+
+    height = ( df['intensity_extinction'].max() ) * (height_percent / 100)
+    peaks, _ = find_peaks(df[column], height=height, prominence= 0.25*height)
+    peak_wavelengths = df.iloc[peaks]['wavelength'].values
+    peak_intensities = df.iloc[peaks]['intensity_extinction']
+    print(f"Peak wavelengths: {peak_wavelengths}")
+    return peak_wavelengths, peak_intensities
+
+
+def plot_data(base_name, mcd_df: pd.DataFrame, abs_df: pd.DataFrame, mord_df: pd.DataFrame, config: dict, output_file_path: str, sticks_df: pd.DataFrame = None):
     """Plots the MCD, Absorption, and MORD data on a single figure with three stacked graphs.
     
     Optionally plots the derivatives of the absorption spectrum and sticks.
@@ -262,12 +395,16 @@ def plot_data(base_name, mcd_df: pd.DataFrame, abs_df: pd.DataFrame, mord_df: pd
         abs_df (pd.DataFrame): The DataFrame with Absorption data.
         mord_df (pd.DataFrame): The DataFrame with MORD data.
         config (dict): The configuration dictionary.
+        output_file_path (str): The path of the output file. 
         sticks_df (pd.DataFrame, optional): The DataFrame with sticks data. Defaults to None.
+        
     """
 
     # Ensure 'wavelength' column is numeric
     abs_df['wavelength'] = pd.to_numeric(abs_df['wavelength'], errors='coerce')
     mord_df['wavelength'] = pd.to_numeric(mord_df['wavelength'], errors='coerce')
+    if sticks_df is not None:
+        sticks_df['wavelength'] = pd.to_numeric(sticks_df['wavelength'], errors='coerce')
 
     # Filter data based on the wavelength range in mcd_df
     abs_df = abs_df[(abs_df['wavelength'] >= mcd_df['wavelength'].min()) & (abs_df['wavelength'] <= mcd_df['wavelength'].max())]
@@ -290,7 +427,7 @@ def plot_data(base_name, mcd_df: pd.DataFrame, abs_df: pd.DataFrame, mord_df: pd
     if len(abs_df) == 0:
         logging.error("No valid Absorption data")
         return
-
+    
     abs_spec = abs_df['intensity_extinction']
     abs_boxcar = abs_spec.rolling(window=config['window_size'], center=True).mean().fillna(abs_spec)
     abs_X_, abs_Y_ = interpolate_data(abs_df['wavelength'], abs_boxcar, config['spline_points'])
@@ -305,6 +442,14 @@ def plot_data(base_name, mcd_df: pd.DataFrame, abs_df: pd.DataFrame, mord_df: pd
     ax1.grid(False)
     ax1.axhline(y=0, color='dimgrey', linestyle='-')
     ax1.set_title(f'{base_name[:-1]}')
+
+    # Call the peak picking function
+    peak_wavelengths, peak_intensities = pick_peaks(abs_df, column= 'intensity_extinction', height_percent = 1)
+
+    # Plot and label the peaks
+    ax1.plot(peak_wavelengths, peak_intensities, 'ro')
+    for wavelength, intensity in zip(peak_wavelengths, peak_intensities):
+        ax1.text(wavelength, intensity, f'{wavelength:.1f}', ha='right', va='bottom', fontsize=10, color='red')
 
     if sticks_df is not None:
         sticks_df = sticks_df[(sticks_df['wavelength'] >= abs_df['wavelength'].min()) & (sticks_df['wavelength'] <= abs_df['wavelength'].max())]
@@ -364,31 +509,39 @@ def plot_data(base_name, mcd_df: pd.DataFrame, abs_df: pd.DataFrame, mord_df: pd
         ax3.plot(abs_df['wavelength'], abs_df['intensity_2nd_derivative'], label='2nd Derivative of Abs.', linestyle='--', color='orange')
         ax3.legend()
     
+    output_plot_path = os.path.join(os.path.dirname(output_file_path), base_name + '_plot.png')
+    plt.savefig(output_plot_path)
+
     plt.show()
     plt.close(fig)  # Close the figure to ensure it does not persist in the next iteration
 
 
 
-
-def save_data(output_file_path: str, wavelength: pd.Series, R_signed: pd.Series, R_signed_averaged_filled: pd.Series, R_stdev: pd.Series):
+def save_data(output_file_path, mcd_df, abs_df_copy, R_signed_averaged_filled, sticks_df=None):
     """Saves processed data to a CSV file.
     
     Args:
         output_file_path (str): The path to the output file.
-        wavelength (pd.Series): The wavelength data.
-        R_signed (pd.Series): The R_signed data.
+        mcd_df (pd.DataFrame): The DataFrame with MCD data.
+        abs_df_copy (pd.DataFrame): The DataFrame with Absorption data.
         R_signed_averaged_filled (pd.Series): The rolling averaged R_signed data.
-        R_stdev (pd.Series): The standard deviation data.
+        sticks_df (pd.DataFrame, optional): The DataFrame with sticks data. Defaults to None.
     """
+    # Merge dataframes to align absorption data with MCD data
+    merged_df = pd.merge(mcd_df, abs_df_copy[['wavelength', 'intensity_extinction']], on='wavelength', how='inner')
 
-    output_df = pd.DataFrame({
-        'wavelength': wavelength,
-        'R_signed': R_signed,
-        'R_signed_averaged_filled': R_signed_averaged_filled,
-        'std_dev': R_stdev
-    })
-    output_df.to_csv(output_file_path, index=False)
+    # Add sticks data if available
+    if sticks_df is not None:
+        merged_df = pd.merge(merged_df, sticks_df[['wavelength', 'strength']], on='wavelength', how='left')
+        merged_df.rename(columns={'strength': 'sticks'}, inplace=True)
+    else:
+        merged_df['sticks'] = np.nan
+
+    merged_df['R_signed_averaged_filled'] = R_signed_averaged_filled
+
+    merged_df.to_csv(output_file_path, index=False)
     logging.info(f"Data saved to {output_file_path}")
+
 
 def process_files(file_dict: defaultdict, config: dict, abs_data: dict):
     """Processes each set of files and performs MCD, Absorption, and MORD analysis.
@@ -449,9 +602,18 @@ def process_files(file_dict: defaultdict, config: dict, abs_data: dict):
                     output_dir = create_output_directory(base_path)
                     output_file_path = os.path.join(output_dir, base_name + '_processed.csv')
 
-                    plot_data(base_name, mcd_df, abs_df_copy, mord_df, config, sticks_df)
+                    # Call scale_sticks function if sticks_df is not None
+                    if sticks_df is not None:
+                        max_absorbance = abs_df_copy['intensity_extinction'].max()
+                        sticks_df = scale_sticks(sticks_df, max_absorbance)
+                        sticks_column = sticks_df['scaled_strength']
+                    else:
+                        sticks_column = pd.Series([None] * len(mcd_df['wavelength']), index=mcd_df.index)
 
-                    save_data(output_file_path, mcd_df['wavelength'], mcd_df['R_signed_extinction'], R_signed_averaged_filled, mcd_df['std_dev_extinction'])
+                    plot_data(base_name, mcd_df, abs_df_copy, mord_df, config, output_file_path, sticks_df)
+
+                    save_data(output_file_path, mcd_df, abs_df_copy, R_signed_averaged_filled, sticks_df)
+
                 except Exception as e:
                     logging.error(f"Error processing files {pos_file}, {neg_file}, {abs_file}, and {sticks_file}: {e}")
                     messagebox.showerror("Processing Error", f"An error occurred: {e}")
@@ -461,7 +623,6 @@ def process_files(file_dict: defaultdict, config: dict, abs_data: dict):
             missing_types = [ftype for ftype in ['pos', 'neg', 'abs'] if ftype not in files]
             logging.error(f"Missing {', '.join(missing_types)} file(s) for base name {base_name}")
             messagebox.showerror("File Pairing Error", f"Missing {', '.join(missing_types)} file(s) for base name {base_name}")
-
 
 def main():
     """Main function to load configuration, select files, and process the data."""
