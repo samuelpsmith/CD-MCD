@@ -12,6 +12,7 @@ import logging
 import re
 from collections import defaultdict
 import traceback
+import math
 
 # Set up logging
 logging.basicConfig(filename='mcd_processing.log', level=logging.DEBUG, 
@@ -149,9 +150,27 @@ def scale_sticks(sticks_df: pd.DataFrame, max_absorbance: float, scale_factor: f
     sticks_df['scaled_strength'] = sticks_df['strength'] / sticks_df['strength'].max() * max_absorbance * scale_factor
     return sticks_df
 
+def gaussian_wavenumber(k, amplitude, mean, stddev):
+    # adapted from https://hannibunny.github.io/orbook/preprocessing/04gaussianDerivatives.html
+    mu = mean
+    sigma = stddev
+    return amplitude * (1 / np.sqrt(2* np.pi)) *  np.exp(-1 * (k-mu)**2 / (2 * sigma**2))
+
 def gaussian_derivative_wavenumber(k, amplitude, mean, stddev):
-    #remove the negative sign before amplitude to account for the change in sign when converting to wavenumber.
-    return amplitude * (k - mean) / (stddev ** 2) * np.exp(-((k - mean) ** 2) / (2 * stddev ** 2))
+    mu = mean
+    sigma = stddev
+    # adapted from https://hannibunny.github.io/orbook/preprocessing/04gaussianDerivatives.html
+    # remove the negative sign before amplitude to account for the change in sign when converting to wavenumber.
+    # duplicated amplitude : return (amplitude * k / sigma**2 )* (1 / (np.sqrt( 2 * np.pi) * sigma) ) * np.exp(-1 * (k-mu)**2 / (2 * sigma**2))
+    return (amplitude * (k-mu) / sigma**2 ) * np.exp(-1 * (k-mu)**2 / (2 * sigma**2))
+
+
+def lorentzian_wavenumber():
+    return
+
+
+def gaussian_derivative_wavenumber_old(k, amplitude, mean, stddev):
+    return amplitude * (k-mean)/ (stddev **2) * np.exp(-((k - mean)**2) / (2 * stddev ** 2))
 
 def pick_peaks(df, column='intensity_extinction', height_percent=1):
     """Picks the peaks of the absorption data.
@@ -190,7 +209,7 @@ def find_local_maxima_within_range(x_data, y_data, center, sigma):
         return local_max_x, local_max_y
     return center, 0
 
-def fit_peak(x_data, y_data, initial_guess):
+def fit_peak_A(x_data, y_data, initial_guess):
     """Fit the peak using the gaussian_derivative_wavenumber function.
     
     Args:
@@ -222,6 +241,54 @@ def fit_peak(x_data, y_data, initial_guess):
         except Exception as e:
             print(f"An error occurred during fitting with opposite sign for initial guess {initial_guess}: {e}")
             return None, None
+        
+def fit_peak(x_data, y_data, initial_guess):
+    """Fit the peak using the gaussian_wavenumber function.
+    
+    Args:
+        x_data (np.ndarray): The x-axis data (wavenumber).
+        y_data (np.ndarray): The y-axis data.
+        initial_guess (list): The initial guess for the fitting parameters.
+        
+    Returns:
+        tuple: The fitted parameters and the R² value.
+    """
+    try:
+        popt, pcov = curve_fit(gaussian_wavenumber, x_data, y_data, p0=initial_guess)
+        residuals = y_data - gaussian_wavenumber(x_data, *popt)
+        ss_res = np.sum(residuals**2)
+        ss_tot = np.sum((y_data - np.mean(y_data))**2)
+        r_squared = 1 - (ss_res / ss_tot)
+        return popt, r_squared
+    except Exception as e:
+        print(f"An error occurred during fitting for initial guess {initial_guess}: {e}")
+        try:
+            # Try fitting with the opposite sign of the amplitude
+            initial_guess[0] = -initial_guess[0]
+            popt, pcov = curve_fit(gaussian_wavenumber, x_data, y_data, p0=initial_guess)
+            residuals = y_data - gaussian_wavenumber(x_data, *popt)
+            ss_res = np.sum(residuals**2)
+            ss_tot = np.sum((y_data - np.mean(y_data))**2)
+            r_squared = 1 - (ss_res / ss_tot)
+            return popt, r_squared
+        except Exception as e:
+            print(f"An error occurred during fitting with opposite sign for initial guess {initial_guess}: {e}")
+            return None, None
+        
+def adjust_nearest_mean_points(df, means, column='normalized_intensity'):
+    """
+    Adjust the points nearest to the means in the DataFrame by averaging the nearest points.
+    
+    Args:
+        df (pd.DataFrame): The DataFrame containing the data.
+        means (list): The list of mean values (wavenumbers) to find the nearest points to.
+        column (str): The column to adjust. Defaults to 'normalized_intensity'.
+    """
+    for mean in means:
+        nearest_idx = (df['wavenumber'] - mean).abs().idxmin()
+        if nearest_idx + 1 < len(df) and nearest_idx - 1 >= 0:
+            df.at[nearest_idx, column] = (df.at[nearest_idx - 1, column] + df.at[nearest_idx + 1, column]) / 2
+    return df
 
 def fit_peaks_separately(abs_df, mcd_df, column='intensity_extinction', height_percent=1):
     """Fit peaks separately using the gaussian_derivative_wavenumber function.
@@ -276,7 +343,7 @@ def fit_peaks_separately(abs_df, mcd_df, column='intensity_extinction', height_p
             #print("sigma_wavenumber:", sigma_wavenumber)
 
             sigma_max_wavenumber = 1e7 / (peak_wavelength + 3 * sigma_wavelength)
-            sigma_wavenumber = (sigma_max_wavenumber - peak_wavenumber) 
+            sigma_wavenumber = (sigma_max_wavenumber - peak_wavenumber) / 3
             print("sigma_wavenumber:", sigma_wavenumber)
 
             print(f"Processing peak at index {peak_index}: wavelength={peak_wavelength}, wavenumber={peak_wavenumber}, sigma_wavelength={sigma_wavelength}, sigma_wavenumber={sigma_wavenumber}")
@@ -288,7 +355,7 @@ def fit_peaks_separately(abs_df, mcd_df, column='intensity_extinction', height_p
             # Step 5: Fit the peak using MCD data
             initial_guess = [local_max_y, peak_wavenumber, sigma_wavenumber]
             print('initial guess:', initial_guess)
-            popt, r_squared = fit_peak(mcd_df['wavenumber'], mcd_df['normalized_intensity'], initial_guess)
+            popt, r_squared = fit_peak_A(mcd_df['wavenumber'], mcd_df['normalized_intensity'], initial_guess)
             print(f"Fitted parameters: {popt}, R²: {r_squared}")
 
             if popt is not None:
@@ -300,23 +367,105 @@ def fit_peaks_separately(abs_df, mcd_df, column='intensity_extinction', height_p
             traceback.print_exc()
             continue
     
-    print("Finished peak fitting process.")
+    print("Finished A-term peak fitting process.")
+
+    product_of_fitted_curves = np.zeros_like(mcd_df['normalized_intensity'])
 
     # Plot the fitted lineshapes
     plt.figure(figsize=(8, 6))
-    plt.plot(mcd_df['wavenumber'], mcd_df['normalized_intensity'], label='Normalized Intensity')
+    plt.plot(mcd_df['wavenumber'], mcd_df['normalized_intensity'], label='A-terms, Normalized Intensity')
     for params, r_squared in fitted_params:
         if params is not None:
             amplitude, mean, stddev = params
             fitted_curve = gaussian_derivative_wavenumber(mcd_df['wavenumber'], amplitude, mean, stddev)
             plt.plot(mcd_df['wavenumber'], fitted_curve, label=f'Fit (R² = {r_squared:.2f})')
+            product_of_fitted_curves += fitted_curve
+    
     plt.xlabel('Wavenumber')
     plt.ylabel('Normalized Intensity')
     plt.title('Normalized Intensity vs. Wavenumber with Fitted Lineshapes')
     plt.legend()
     plt.show()
 
-    return fitted_params
+    # Create a copy of the DataFrame
+    mcd_minusA_df = mcd_df.copy()
+
+    # Subtract the product of fitted curves from the normalized intensity
+    mcd_minusA_df['normalized_intensity'] -= product_of_fitted_curves
+
+    # Extract mean wavenumbers from fitted parameters
+    mean_wavenumbers = [params[1] for params, _ in fitted_params]
+
+    # Adjust the points nearest to the means
+    mcd_minusA_df = adjust_nearest_mean_points(mcd_minusA_df, mean_wavenumbers)
+    #mcd_boxcarA = mcd_minusA_df['normalized_intensity']
+    #mcd_boxcar = mcd_spec.rolling(window=config['window_size'], center=True).mean().fillna(mcd_spec)
+    #mcd_boxcarA = mcd_minusA_df.rolling(0.1 * sigma_wavenumber, center=True).mean().fillna(mcd_minusA_df)
+    #mcd_X_minusA, mcd_Y_minusA = interpolate_data(mcd_df['wavelength'], mcd_boxcarA, 100)
+
+    # Plot the product of fitted curves
+    plt.figure(figsize=(8, 6))
+    plt.plot(mcd_df['wavenumber'], product_of_fitted_curves, label='Product of Fitted Curves', color='red')
+    plt.plot(mcd_minusA_df['wavenumber'], mcd_minusA_df['normalized_intensity'], label='Remainder', color='blue')
+    #plt.plot(mcd_X_minusA, mcd_Y_minusA, label='Remainder', color='blue')
+    plt.xlabel('Wavenumber')
+    plt.ylabel('Product of Fitted Curves')
+    plt.title('Product of Fitted Gaussian Derivative Lineshapes')
+    plt.legend()
+    plt.show()
+
+
+    # Step 6: Pick peaks from the subtracted spectrum
+    remaining_peaks, remaining_wavelengths, remaining_intensities = pick_peaks(mcd_minusA_df, column='normalized_intensity', height_percent=height_percent)
+    print(f"Remaining peaks: {remaining_peaks}")
+    print(f"Remaining wavelengths: {remaining_wavelengths}")
+    print(f"Remaining intensities: {remaining_intensities}")
+
+    gaussian_fitted_params = []
+    for peak_index in remaining_peaks:
+        try:
+            peak_wavenumber = mcd_minusA_df.iloc[peak_index]['wavenumber']
+            sigma_wavenumber = (peak_widths(mcd_minusA_df['normalized_intensity'], [peak_index], rel_height=0.5)[0][0]) / (2 * np.sqrt(2 * np.log(2)))
+            peak_intensity = mcd_df.iloc[peak_index]['normalized_intensity']
+
+            initial_guess = [peak_intensity, peak_wavenumber, sigma_wavenumber]
+            print('Gaussian initial guess:', initial_guess)
+
+            popt, r_squared = fit_peak(mcd_minusA_df['wavenumber'], mcd_df['normalized_intensity'], initial_guess)
+            print(f"Gaussian Fitted parameters: {popt}, R²: {r_squared}")
+
+            if popt is not None:
+                gaussian_fitted_params.append((popt, r_squared))
+                print()
+
+        except Exception as e:
+            print(f"Error fitting remaining peak at index {peak_index}: {e}")
+            traceback.print_exc()
+            continue
+
+    print("Finished fitting remaining peaks.")
+
+    # Plot the fitted lineshapes
+    plt.figure(figsize=(8, 6))
+    plt.plot(mcd_df['wavenumber'], mcd_df['normalized_intensity'], label='Normalized Intensity After Subtraction')
+    for params, r_squared in fitted_params:
+        if params is not None:
+            amplitude, mean, stddev = params
+            fitted_curve = gaussian_derivative_wavenumber(mcd_df['wavenumber'], amplitude, mean, stddev)
+            plt.plot(mcd_df['wavenumber'], fitted_curve, label=f'Derivative Fit (R² = {r_squared:.2f})')
+    for params, r_squared in gaussian_fitted_params:
+        if params is not None:
+            amplitude, mean, stddev = params
+            fitted_curve = gaussian_wavenumber(mcd_df['wavenumber'], amplitude, mean, stddev)
+            plt.plot(mcd_df['wavenumber'], fitted_curve#, label=f'Gaussian Fit (R² = {r_squared:.2f})'
+                     )
+    plt.xlabel('Wavenumber')
+    plt.ylabel('Normalized Intensity')
+    plt.title('Normalized Intensity vs. Wavenumber with Fitted Lineshapes')
+    plt.legend()
+    plt.show()
+
+    return fitted_params, gaussian_fitted_params
 
 def plot_data(base_name, mcd_df: pd.DataFrame, abs_df: pd.DataFrame, mord_df: pd.DataFrame, config: dict, output_file_path: str, fitted_params, sticks_df: pd.DataFrame = None):
     abs_df['wavelength'] = pd.to_numeric(abs_df['wavelength'], errors='coerce')
