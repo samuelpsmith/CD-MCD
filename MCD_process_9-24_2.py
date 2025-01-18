@@ -52,7 +52,7 @@ def select_files() -> defaultdict:
     )
     file_dict = defaultdict(dict)
 
-    if file_paths:
+    if file_paths: # here I am trying to fix that case sensitivity problem.
         for file_path in file_paths:
             base_name = os.path.splitext(os.path.basename(file_path))[0]
             if re.search(r"pos", base_name, re.IGNORECASE):
@@ -91,9 +91,9 @@ def read_csv_file(filename: str, column_names: list = None) -> pd.DataFrame:
     try:
         if column_names:
             df = pd.read_csv(filename, names=column_names)
-        else:
+        else: # I dont think this works, because later on I require column names to do basically any processing. 
             df = pd.read_csv(filename)
-        df = df.sort_values(by="wavelength").reset_index(drop=True)
+        df = df.sort_values(by="wavelength").reset_index(drop=True) #wonder what reset index does. 
         logging.info(f"Read and sorted file {filename} successfully")
         return df
     except FileNotFoundError:
@@ -110,17 +110,21 @@ def read_csv_file(filename: str, column_names: list = None) -> pd.DataFrame:
 def calculate_differences(
     positive_df: pd.DataFrame, negative_df: pd.DataFrame
 ) -> tuple:
+    # This is a way to account for a baseline that is introduce by optical abberations of the setup, incl. linear dichroisms(?)
+    # we do this parametrically ( by X and by Y)
     x_diff = (positive_df["x_pos"] - negative_df["x_neg"]) / 2
     y_diff = (positive_df["y_pos"] - negative_df["y_neg"]) / 2
     x_stdev = np.sqrt(
         2 * ((positive_df["std_dev_x"] ** 2) + (negative_df["std_dev_x"] ** 2))
     )
+    # this is just a stats formula, but I better cite this. 
     y_stdev = np.sqrt(
         2 * ((positive_df["std_dev_y"] ** 2) + (negative_df["std_dev_y"] ** 2))
     )
-    R = np.sqrt(x_diff**2 + y_diff**2)
+    R = np.sqrt(x_diff**2 + y_diff**2) #pythagorus
+    # cite all these. 
     R_stdev = np.sqrt(((x_diff * x_stdev / R) ** 2) + ((y_diff * y_stdev / R) ** 2))
-    R_signed = R * np.sign(y_diff)
+    R_signed = R * np.sign(y_diff) # why do we multiply by the sign of y and not x? idk it I think its bc it looked better. figure it out. 
     return x_diff, y_diff, x_stdev, y_stdev, R_signed, R_stdev
 
 
@@ -138,6 +142,8 @@ def interpolate_data(
 
 
 def kk_arbspace(omega: np.ndarray, imchi: np.ndarray, alpha: int) -> np.ndarray:
+    # kramers kronig function in arbitrary (frequency?) space
+    # we ought to probably look this thing up and make sure we have it implemented correctly. 
     omega = np.array(omega)
     imchi = np.array(imchi)
 
@@ -643,6 +649,7 @@ def save_data(output_file_path, mcd_df, abs_df_copy, mord_df, sticks_df=None):
 
 
 def process_files(file_dict: defaultdict, config: dict, abs_data: dict):
+    # here I am explicitly defining column names because the data comes unlabelled. 
     column_names_pos = [
         "wavelength",
         "x_pos",
@@ -675,7 +682,8 @@ def process_files(file_dict: defaultdict, config: dict, abs_data: dict):
             logging.info(
                 f"Processing files: {pos_file}, {neg_file}, {abs_file}, and {sticks_file}"
             )
-
+            # read all those files in unless we dont have a sticks file then skip sticks
+        
             positive_df = read_csv_file(pos_file, column_names_pos)
             negative_df = read_csv_file(neg_file, column_names_neg)
             abs_df = read_csv_file(abs_file, column_names_abs)
@@ -690,6 +698,9 @@ def process_files(file_dict: defaultdict, config: dict, abs_data: dict):
             ):
                 try:
                     abs_df_copy = abs_df.copy()
+                    #pass by ref vs pass by value.
+
+                    # I dont know that we ever really want to look at this in units of abs? consider changing?
 
                     if config["convert_to_extinction"]:
                         print("convert to extinction is true (abs)")
@@ -716,19 +727,19 @@ def process_files(file_dict: defaultdict, config: dict, abs_data: dict):
                         print("convert to extinction is true (mcd)")
                         mcd_df = convert_abs_to_extinction(
                             mcd_df,
-                            os.path.basename(abs_file),
+                            os.path.basename(abs_file), # whats goin on here?
                             abs_data,
                             ["R_signed", "std_dev"],
                         )
 
                     R_signed_averaged_filled = (
-                        mcd_df["R_signed_extinction"]
+                        mcd_df["R_signed_extinction"] # this is bad. This is a bad idea and we gotta not do this anymore. 
                         .rolling(window=3, center=True)
                         .mean()
                         .fillna(mcd_df["R_signed_extinction"])
-                    )
+                    ) # we DO need to fill in NaNs, but we ought not to rolling average data anymore. 
 
-                    wavenumber_cm1 = 1e7 / mcd_df["wavelength"].values
+                    wavenumber_cm1 = 1e7 / mcd_df["wavelength"].values # gotta convert to wavenumber to do kramers kronig. 
                     mord_spectrum = kk_arbspace(
                         wavenumber_cm1, mcd_df["R_signed_extinction"].values, alpha=0
                     )  # should I used the fillna to handle null values before this?
@@ -802,8 +813,9 @@ def process_files(file_dict: defaultdict, config: dict, abs_data: dict):
 
 def main():
     try:
-
         # Construct the absolute path to 'abs_data.json' based on the script's location
+        # basically i iassume that abs_data.json, config.json and this script are all in the same directory.
+        #i think I also had some issue where if you were running this on mac vs windows it didnt build the directory nmame right. (Case sensitvie?)
         script_dir = os.path.dirname(os.path.abspath(__file__))
         abs_data_path = os.path.join(script_dir, "abs_data.json")
         config_path = os.path.join(script_dir, "config.json")
