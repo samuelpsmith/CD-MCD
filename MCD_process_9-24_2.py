@@ -3,54 +3,11 @@ import pandas as pd
 import numpy as np
 from tkinter import messagebox
 from collections import defaultdict
-from base.utils import file_reader as fr, logger
+from base.utils import file_handler as fh, logger
 from base import data_processing as dpro, data_plotting as dplt
 
 #get logger with module name
 logging = logger.get_logger(__name__)
-
-matplotlib_logger = logging.getLogger("matplotlib")
-matplotlib_logger.setLevel(logging.WARNING)
-print(f"Current working directory: {os.getcwd()}")
-
-
-def save_data(output_file_path, mcd_df, abs_df_copy, mord_df, sticks_df=None):
-    # Merge MCD and Absorption data
-    # considering renaming to MCD_process, abs, mord. But doing so would break some of the modularity of the code.
-
-    print("sticks_df in savedata:", sticks_df)
-    merged_df = pd.merge(
-        mcd_df.rename(columns={"R_signed_extinction": "MCD_process"}),
-        abs_df_copy.rename(columns={"intensity_extinction": "abs"}),
-        on="wavelength",
-        how="inner",
-    )
-
-    # Merge in MORD data
-    merged_df = pd.merge(
-        merged_df,
-        mord_df.rename(columns={"mord": "mord"}),
-        on="wavelength",
-        how="inner",
-    )
-
-    # Merge in sticks data, if available
-    if sticks_df is not None:
-        merged_df = pd.merge(
-            merged_df,
-            sticks_df[["wavelength", "strength"]].rename(
-                columns={"strength": "sticks"}
-            ),
-            on="wavelength",
-            how="outer",
-        )
-    else:
-        merged_df["sticks"] = np.nan
-
-    # Save the merged data to CSV with updated column names
-    merged_df.to_csv(output_file_path, index=False)
-    logging.info(f"Data saved to {output_file_path}")
-
 
 def process_files(file_dict: defaultdict, config: dict, abs_data: dict):
     # here I am explicitly defining column names because the data comes unlabelled.
@@ -88,11 +45,11 @@ def process_files(file_dict: defaultdict, config: dict, abs_data: dict):
             )
             # read all those files in unless we dont have a sticks file then skip sticks
 
-            positive_df = fr.read_csv_file(pos_file, column_names_pos)
-            negative_df = fr.read_csv_file(neg_file, column_names_neg)
-            abs_df = fr.read_csv_file(abs_file, column_names_abs)
+            positive_df = fh.read_csv_file(pos_file, column_names_pos)
+            negative_df = fh.read_csv_file(neg_file, column_names_neg)
+            abs_df = fh.read_csv_file(abs_file, column_names_abs)
             sticks_df = (
-                fr.read_csv_file(sticks_file, column_names_sticks) if sticks_file else None
+                fh.read_csv_file(sticks_file, column_names_sticks) if sticks_file else None
             )
 
             if (
@@ -159,7 +116,7 @@ def process_files(file_dict: defaultdict, config: dict, abs_data: dict):
                     )
 
                     base_path = os.path.dirname(pos_file)
-                    output_dir = fr.create_output_directory(base_path)
+                    output_dir = fh.create_output_directory(base_path)
                     output_file_path = os.path.join(
                         output_dir, base_name + "processed.csv"
                     )
@@ -189,7 +146,7 @@ def process_files(file_dict: defaultdict, config: dict, abs_data: dict):
 
                     print("sticks_df:", sticks_df)
 
-                    save_data(
+                    fh.save_data(
                         output_file_path,
                         mcd_df,
                         abs_df_copy,
@@ -226,9 +183,9 @@ def main():
         script_dir = os.path.dirname(os.path.abspath(__file__))
         abs_data_path = os.path.join(script_dir, "abs_data.json")
         config_path = os.path.join(script_dir, "config.json")
-        abs_data = fr.load_json(abs_data_path)
-        config = fr.load_json(config_path)
-        file_dict = fr.select_files()
+        abs_data = fh.load_json(abs_data_path)
+        config = fh.load_json(config_path)
+        file_dict = fh.select_files()
         if file_dict:
             process_files(file_dict, config, abs_data)
         else:

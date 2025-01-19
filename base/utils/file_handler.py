@@ -6,6 +6,7 @@ import tkinter as tk
 import re
 import pandas as pd
 from tkinter import filedialog, messagebox
+import numpy as np
 
 
 #get logger
@@ -87,3 +88,41 @@ def read_csv_file(filename: str, column_names: list = None) -> pd.DataFrame:
     except Exception as e:
         logging.error(f"Unexpected error: {e}")
     return None
+
+def save_data(output_file_path, mcd_df, abs_df_copy, mord_df, sticks_df=None):
+    # Merge MCD and Absorption data
+    # considering renaming to MCD_process, abs, mord. But doing so would break some of the modularity of the code.
+
+    print("sticks_df in savedata:", sticks_df)
+    merged_df = pd.merge(
+        mcd_df.rename(columns={"R_signed_extinction": "MCD_process"}),
+        abs_df_copy.rename(columns={"intensity_extinction": "abs"}),
+        on="wavelength",
+        how="inner",
+    )
+
+    # Merge in MORD data
+    merged_df = pd.merge(
+        merged_df,
+        mord_df.rename(columns={"mord": "mord"}),
+        on="wavelength",
+        how="inner",
+    )
+
+    # Merge in sticks data, if available
+    if sticks_df is not None:
+        merged_df = pd.merge(
+            merged_df,
+            sticks_df[["wavelength", "strength"]].rename(
+                columns={"strength": "sticks"}
+            ),
+            on="wavelength",
+            how="outer",
+        )
+    else:
+        merged_df["sticks"] = np.nan
+
+    # Save the merged data to CSV with updated column names
+    merged_df.to_csv(output_file_path, index=False)
+    logging.info(f"Data saved to {output_file_path}")
+
