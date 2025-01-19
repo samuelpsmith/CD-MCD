@@ -5,9 +5,8 @@ import utils.logger as logger
 import os
 import matplotlib.pyplot as plt
 
-
-
 logging = logger.get_logger(__name__)
+
 def plot_data_old(
         base_name: str,
         mcd_df: pd.DataFrame,
