@@ -1,11 +1,16 @@
 import os
+import sys
 import pandas as pd
 import numpy as np
+
 from tkinter import messagebox
 from collections import defaultdict
-from base.utils import file_handler as fh, logger
+from base.utils import file_handler as fh
+from base.utils import logger
 from base import data_processing as dpro, data_plotting as dplt
 
+#init root logger
+logger.init_root_logger("mcd_process_log.txt")
 #get logger with module name
 logging = logger.get_logger(__name__)
 

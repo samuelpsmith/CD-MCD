@@ -1,5 +1,5 @@
 from collections import defaultdict
-import logger
+from base.utils import logger
 import json
 import os
 import tkinter as tk
