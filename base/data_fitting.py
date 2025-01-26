@@ -353,7 +353,7 @@ def fit_gaussians(x, y, num_basis_gaussians, amplitudes, centers, sigmas):
         #                   min=sigmas[i] - (sigmas[i] * PERCENTAGE_RANGE / 100),
         #                   max=sigmas[i] + (sigmas[i] * PERCENTAGE_RANGE / 100))
 
-    result = model.fit(y, params, x=x, nan_policy='omit')
+    result = model.fit(y, params, x=x)
     return result, model
 
 
@@ -872,8 +872,7 @@ def iterate_and_fit_gaussians(x, y, z, max_basis_gaussians=MAX_BASIS_GAUSSIANS, 
 
     # Identify the least impactful Gaussians and remove them
     #float is being truncated by converting to int. needs to be int
-    print(len(all_fits))
-    impactful_gaussians = remove_least_impactful_gaussians_by_fit(x, y, all_fits[0], num_basis)
+    impactful_gaussians = remove_least_impactful_gaussians_by_fit(x, y, all_fits[-1], num_basis)
     print(f"Least impactful Gaussians are: {impactful_gaussians}")
 
     # Extract indices of least impactful Gaussians
@@ -914,7 +913,7 @@ def iterate_and_fit_gaussians(x, y, z, max_basis_gaussians=MAX_BASIS_GAUSSIANS, 
                            max=sigma_value + (sigma_value * PERCENTAGE_RANGE / 100))
 
     # Perform the fit again after removing the least impactful Gaussians
-    reduced_result = reduced_model.fit(y, reduced_params, x=x, nan_policy='omit')
+    reduced_result = reduced_model.fit(y, reduced_params, x=x)
 
     # Plot the fit after the least impactful Gaussians are removed
     plt.figure(figsize=(8, 4))
@@ -1067,7 +1066,7 @@ def iterate_and_fit_gaussians(x, y, z, max_basis_gaussians=MAX_BASIS_GAUSSIANS, 
                                       max=derivative_sigma_value + (derivative_sigma_value * PERCENTAGE_RANGE / 100))
 
     # Perform the fit again after removing the least impactful Gaussians
-    reduced_A_result = reduced_derivative_model.fit(z, reduced_derivative_params, x=x, nan_policy='omit')
+    reduced_A_result = reduced_derivative_model.fit(z, reduced_derivative_params, x=x)
 
     # Plot the fit after the least impactful Gaussians are removed
     plt.figure(figsize=(8, 4))
@@ -1148,7 +1147,7 @@ if __name__ == "__main__":
 
 
     #remove data that corresponds with NAN
-    mask = ~np.isnan(wavenumbers) & ~np.isnan(scaled_absorption) &~np.isnan(scaled_mcd)
+    mask = ~np.isnan(wavenumbers) & ~np.isnan(scaled_absorption) & ~np.isnan(scaled_mcd)
     x = wavenumbers[mask]
     y = scaled_absorption[mask]
     z = scaled_mcd[mask]
