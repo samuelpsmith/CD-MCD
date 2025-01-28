@@ -1,7 +1,7 @@
 import pandas as pd
-import base.data_processing as dp
+import data_processing as dp
 import numpy as np
-import base.utils.logger as logger
+import utils.logger as logger
 import os
 import matplotlib.pyplot as plt
 
@@ -309,3 +309,27 @@ def plot_data_old(
     plt.show()
     plt.close(fig)
     logging.info("Plot generation completed.")
+def plot_gaussian_iterations(x, y, all_fits, num_basis, lowest_bic_idx):
+    for fit_idx, fit in enumerate(all_fits):
+        plt.figure(figsize=(8, 4))
+        plt.plot(x, y, 'b', label='Data with noise', zorder=1)
+
+        # Plot the true original Gaussians - cant in real data
+        # for i, g_true in enumerate(gaussians):
+        #    plt.plot(x, g_true, 'g-', label=f'True Gaussian {i}', alpha=0.7, zorder=2)
+
+        # Plot the individual fitted Gaussian components for this fit
+
+        #x axis from model to avoid array size errors
+        x_fit = fit.userkws['x']
+        for i in range(num_basis):
+            g_fit = fit.eval_components()[f'g{i}_']
+            plt.plot(x_fit, g_fit, label=f'Fitted Gaussian {i} in Fit {fit_idx}', linestyle='--', zorder=4)
+
+        # Plot the composite fit
+        plt.plot(x_fit, fit.best_fit, 'r-', label=f'Composite Fit {fit_idx}', zorder=3)
+        plt.title(f'Constituent and True Gaussians of N, Iteration: {lowest_bic_idx}, Fit: {fit_idx}')
+        plt.xlabel('X')
+        plt.ylabel('Y')
+        plt.legend()
+        plt.show()

@@ -2,48 +2,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 from lmfit.models import GaussianModel
 import lmfit
-import time
 from scipy.signal import find_peaks, savgol_filter
 import pandas as pd
-from lmfit import Model
 import os
+import data_plotting as dplt
+from MCD_process.base.CustomGaussianModel import CustomGaussianModel
+from MCD_process.base.CustomGaussian_ddx_Model import CustomGaussian_ddx_Model
+from MCD_process.base.constants import *
+from MCD_process.base.gaussians import gaussian
 
 # Define all the constants
 
-# Test data generation.
-NUM_GAUSSIANS = 3  # Number of Gaussians to generate
-NOISE_LEVEL = 0.01  # Noise level to add to the generated Gaussian curve
-NUM_X_VALUES = 500  # Number of points in the x-axis array
-X_MIN = 0  # Minimum value for the x range
-X_MAX = 60  # Maximum value for the x range
-SEED = 479806  # seed for reproducibility.
-MIN_DISTANCE = 5  # simulate the 'bandwidth' of the fake instrument.
-
-# Smoothing
-WINDOW_LENGTH = 5  # Window length for Savitzky-Golay smoothing (datapoints?) (relate to bandwidth?)
-POLYORDER = 4  # Polynomial order for Savitzky-Golay smoothing
-
-# Peak picking
-HEIGHT_THRESHOLD = 0.04  # Minimum height threshold for peak detection - should be greater than noise after smoothing. Trouble is that the negative side bands likely mean zero isn't at zero.
-DISTANCE = 5  # The minimum distance, in number of samples, between peaks. - This should be related to bandwidth for certain
-PROMINENCE_PERECENT = 0.04  # Prominence is here as a multiple of max height. What is (topographic) prominence? It is "the minimum height necessary to descend to get from the summit to any higher terrain", as it can be seen here
-
-# Fitting
-MAX_BASIS_GAUSSIANS = 10  # Maximum number of basis Gaussians for fitting
-NUM_GUESSES = 1  # Number of guesses for each basis fitting - created this with the idea that I would want to allow for some random walk over guess space ? For now keep to 1.
-VARY_CENTERS = False
-DELTA_BIC_THRESHOLD = 0  # Threshold for detecting when BIC levels out - depends on the number of points. Need to normalize somehow. Set to zero to effectively bypass.
-THRESHOLD_PERCENT = 0.1  # Threshold under which a basis curve is not contributing to the fit, and therefore is removed. This should probably be maximally 100/N, N is the number of (reasonable) basis curves. In experience, the ones that don't contribute tend to be very small say less than 1%
-PERCENTAGE_RANGE = 1  # The percentage by which the initial parameters will be allowed to relax on re-fitting after removing poor curves.
-PERCENT_RANGE_X = 1
-TOLERANCE_X = 2  # how close centers can be as a percent of the overall x values and be considered the same.
-
-# Constants
-SMALL_FWHM_FACTOR = 2.355  # Conversion factor from FWHM to sigma
-tiny = 1.0e-15
-log2 = np.log(2)
-s2pi = np.sqrt(2 * np.pi)
-s2 = np.sqrt(2.0)
 
 
 # Define a function to group close centers, using tolerance as a percentage of the x range
@@ -80,235 +49,7 @@ def group_centers(dipole_params, aterm_params, x_values, tolerance_percentage=5)
     return grouped_params
 
 
-def custom_gaussian_old(x, amplitude, center, sigma):
-    """Gaussian function."""
-    return (amplitude / (sigma * np.sqrt(2 * np.pi))) * np.exp(-((x - center) ** 2) / (2 * sigma ** 2))
-
-
-def custom_gaussian(x, amplitude=1.0, center=0.0, sigma=1.0):
-    """Return a 1-dimensional Gaussian function.
-
-    gaussian(x, amplitude, center, sigma) =
-        (amplitude/(s2pi*sigma)) * exp(-(1.0*x-center)**2 / (2*sigma**2))
-
-    """
-    return ((amplitude / (max(tiny, s2pi * sigma)))
-            * np.exp(-(1.0 * x - center) ** 2 / max(tiny, (
-                        2 * sigma ** 2))))  # here, why do they multiply by 1.0? Is it to set it to a float always?
-
-
 # Function to generate a single Gaussian
-def gaussian_old(x, amplitude, center, width):
-    return amplitude * np.exp(-(x - center) ** 2 / (2 * width ** 2))
-
-
-def gaussian(x, mu, gamma, a_0):
-    "Returns a normalized gaussian function. Normalized to 1"
-    return a_0 * ((2 * np.sqrt(np.log(2))) / (gamma * np.sqrt(np.pi))) * np.exp(
-        -((4 * np.log(2)) / (gamma ** 2)) * (x - mu) ** 2)
-
-
-def stable_gaussian(x, mu, gamma, a_0):
-    """Returns a numerically stable gaussian.
-    In the case that non-constant values are found (i.e. not Tiny), then should be normalized to 1.
-    Some choices are not clear - like multplying by 4.0 instead of 4.
-    We choose not to provide default values because we wish to fail on not passing good values."""
-    return a_0 * ((2 * np.sqrt(np.log(2))) / max(tiny, (gamma * np.sqrt(np.pi)))) * np.exp(
-        -((4.0 * max(tiny, (np.log(2)) / (gamma ** 2)))) * (
-                    x - mu) ** 2)  # here we multiply by 4.0 for the same reason that they multiply by 1.0. Maybe this sets as a float.
-
-
-def stable_gaussian_sigma(x, amplitude, center, sigma):
-    """Returns a numerically stable gaussian. Takes arguments in terms of sigma.
-    In the case that non-constant values are found (i.e. not Tiny), then should be normalized to 1.
-    Some choices are not clear - like multplying by 4.0 instead of 4.
-    We choose not to provide default values because we wish to fail on not passing good values."""
-    gamma = sigma * 2 * np.sqrt(2 * np.log(2))
-    a_0 = amplitude
-    mu = center
-    return a_0 * ((2 * np.sqrt(np.log(2))) / max(tiny, (gamma * np.sqrt(np.pi)))) * np.exp(
-        -((4.0 * max(tiny, (np.log(2)) / (gamma ** 2)))) * (
-                    x - mu) ** 2)  # here we multiply by 4.0 for the same reason that they multiply by 1.0. Maybe this sets as a float.
-
-
-def gaussian_derivative(x, mu, gamma, a_0):
-    "Returns the normalized first derivative of a gaussian function. Normalized such that the absolute value of the area under the curve is 1"
-    return ((- a_0 * 4 * np.log(2) * (x - mu)) / (gamma ** 2)) * np.exp(
-        -((4 * np.log(2)) / (gamma ** 2)) * (x - mu) ** 2)
-    # The following is the not normalized form. Instead, normalize by multiplying by x?.
-    # return ((a_0 * -16 * np.log(2) * np.sqrt(np.log(2)) * (x - mu))/(gamma**3 * np.sqrt(np.pi))) * np.exp(-((4 * np.log(2))/(gamma**2)) * (x - mu)**2 )
-
-
-def stable_gaussian_derivative_sigma(x, amplitude, center, sigma):
-    "Returns the normalized first derivative of a gaussian function. Normalized such that f(x) * x = -1"
-    gamma = sigma * 2 * np.sqrt(2 * np.log(2))
-    a_0 = amplitude
-    mu = center
-    # return ((- a_0 * 4 * np.log(2) * (x - mu))/ max(tiny, gamma**2)) * np.exp(-((4.0 * max(tiny, (np.log(2))/(gamma**2)))) * (x - mu)**2)
-    return (a_0 * -16.0 * np.log(2) * np.sqrt(np.log(2)) * (x - mu)) / (
-        max(tiny, (gamma ** 3 * np.sqrt(np.pi)))) * np.exp(-((4.0 * max(tiny, (np.log(2)) / (gamma ** 2)))) * (
-                x - mu) ** 2)  # this function is not normalized to be area under curve of 1.
-
-
-class CustomGaussianModel_default(Model):
-    """A custom Gaussian model replicating the default lmfit GaussianModel."""
-
-    fwhm_factor = 2 * np.sqrt(2 * np.log(2))
-    height_factor = 1 / np.sqrt(2 * np.pi)
-
-    def __init__(self, independent_vars=['x'], prefix='', nan_policy='raise', **kwargs):
-        """
-        Initialize the CustomGaussianModel.
-
-        Parameters:
-        - independent_vars (list): List of independent variable names.
-        - prefix (str): Prefix for parameter names.
-        - nan_policy (str): Handling of NaN values.
-        """
-        super().__init__(custom_gaussian, prefix=prefix, independent_vars=independent_vars, nan_policy=nan_policy,
-                         **kwargs)
-        self._set_paramhints_prefix()
-
-    def _set_paramhints_prefix(self):
-        """Set parameter hints for amplitude, center, sigma, fwhm, and height."""
-        self.set_param_hint('amplitude', min=0)  # Amplitude must be positive
-        self.set_param_hint('center')
-        self.set_param_hint('sigma', min=0)  # Sigma must be positive
-
-        # Expressions for derived parameters fwhm and height
-        self.set_param_hint('fwhm', expr=f'{self.prefix}sigma * {self.fwhm_factor}')
-        # self.set_param_hint('height', expr=f'{self.prefix}amplitude / ({self.prefix}sigma * {self.height_factor})') double check.
-
-    def guess(self, data, x, negative=False, **kwargs):
-        """
-        Estimate initial parameter values from data.
-
-        Parameters:
-        - data (array): The dependent data.
-        - x (array): The independent variable.
-        - negative (bool): Whether to invert the data for peak finding.
-
-        Returns:
-        - Parameters: An lmfit.Parameters object with initial guesses.
-        """
-        # Guess the peak amplitude
-        amplitude_guess = np.max(data) if not negative else np.min(data)
-        # Guess the peak center
-        center_guess = x[np.argmax(data)] if not negative else x[np.argmin(data)]
-        # Guess sigma as a fraction of the total range
-        sigma_guess = (x.max() - x.min()) / 6.0  # Rough estimate for sigma
-
-        params = self.make_params(amplitude=amplitude_guess, center=center_guess, sigma=sigma_guess)
-        return params
-
-
-class CustomGaussianModel(Model):
-    """A custom Gaussian model replicating the default lmfit GaussianModel."""
-
-    fwhm_factor = 2 * np.sqrt(2 * np.log(2))
-    height_factor = 1 / np.sqrt(2 * np.pi)
-
-    def __init__(self, independent_vars=['x'], prefix='', nan_policy='raise', **kwargs):
-        """
-        Initialize the CustomGaussianModel.
-
-        Parameters:
-        - independent_vars (list): List of independent variable names.
-        - prefix (str): Prefix for parameter names.
-        - nan_policy (str): Handling of NaN values.
-        """
-        super().__init__(stable_gaussian_sigma, prefix=prefix, independent_vars=independent_vars, nan_policy=nan_policy,
-                         **kwargs)
-        # it looks like we have a nan issue. - solved by matching param names. duh.
-        self._set_paramhints_prefix()
-
-    def _set_paramhints_prefix(self):
-        """Set parameter hints for amplitude, center, sigma, fwhm, and height."""
-        self.set_param_hint('amplitude', min=0)  # Amplitude must be positive
-        self.set_param_hint('center')
-        self.set_param_hint('sigma', min=0)  # Sigma must be positive
-
-        # Expressions for derived parameters fwhm and height
-        self.set_param_hint('fwhm', expr=f'{self.prefix}sigma * {self.fwhm_factor}')
-        # self.set_param_hint('height', expr=f'{self.prefix}amplitude / ({self.prefix}sigma * {self.height_factor})') double check.
-
-    def guess(self, data, x, negative=False, **kwargs):
-        """
-        Estimate initial parameter values from data.
-
-        Parameters:
-        - data (array): The dependent data.
-        - x (array): The independent variable.
-        - negative (bool): Whether to invert the data for peak finding.
-
-        Returns:
-        - Parameters: An lmfit.Parameters object with initial guesses.
-        """
-        # Guess the peak amplitude
-        amplitude_guess = np.max(data) if not negative else np.min(data)
-        # Guess the peak center
-        center_guess = x[np.argmax(data)] if not negative else x[np.argmin(data)]
-        # Guess sigma as a fraction of the total range
-        sigma_guess = (x.max() - x.min()) / 6.0  # Rough estimate for sigma
-
-        params = self.make_params(amplitude=amplitude_guess, center=center_guess, sigma=sigma_guess)
-        return params
-
-
-class CustomGaussian_ddx_Model(Model):
-    """A custom model of the Gaussian 1st derivative lineshape copying the default lmfit GaussianModel behavior."""
-
-    fwhm_factor = 2 * np.sqrt(2 * np.log(2))
-    height_factor = 1 / np.sqrt(2 * np.pi)
-
-    def __init__(self, independent_vars=['x'], prefix='', nan_policy='raise', **kwargs):
-        """
-        Initialize the CustomGaussianModel.
-
-        Parameters:
-        - independent_vars (list): List of independent variable names.
-        - prefix (str): Prefix for parameter names.
-        - nan_policy (str): Handling of NaN values.
-        """
-        super().__init__(stable_gaussian_derivative_sigma, prefix=prefix, independent_vars=independent_vars,
-                         nan_policy=nan_policy, **kwargs)
-        self._set_paramhints_prefix()
-
-    def _set_paramhints_prefix(self):
-        """Set parameter hints for amplitude, center, sigma, fwhm, and height."""
-        self.set_param_hint(
-            'amplitude')  # Allow negative for inverted a term?  Amplitude is probably stritly positive but we might be able to allow negative values for optimization reasons.
-        self.set_param_hint('center')
-        self.set_param_hint('sigma',
-                            min=0)  # Sigma must be positive - can remove to allow the optimizer to range over greater space easily?
-
-        # Expressions for derived parameters fwhm and height
-        self.set_param_hint('fwhm', expr=f'{self.prefix}sigma * {self.fwhm_factor}')
-        # self.set_param_hint('height', expr=f'{self.prefix}amplitude / ({self.prefix}sigma * {self.height_factor})') double check.
-
-    def guess(self, data, x, negative=False, **kwargs):
-        """
-        Estimate initial parameter values from data.
-        This is just code copying the default behavior from lmfit.
-        We should never use this code because we have a sophisticated initial guess algo.
-
-        Parameters:
-        - data (array): The dependent data.
-        - x (array): The independent variable.
-        - negative (bool): Whether to invert the data for peak finding.
-
-        Returns:
-        - Parameters: An lmfit.Parameters object with initial guesses.
-        """
-        # Guess the peak amplitude
-        amplitude_guess = np.max(data) if not negative else np.min(data)
-        # Guess the peak center
-        center_guess = x[np.argmax(data)] if not negative else x[np.argmin(data)]
-        # Guess sigma as a fraction of the total range
-        sigma_guess = (x.max() - x.min()) / 6.0  # Rough estimate for sigma
-
-        params = self.make_params(amplitude=amplitude_guess, center=center_guess, sigma=sigma_guess)
-        return params
 
 
 # Function to fit Gaussians using lmfit with positive constraints for amplitude and sigma
@@ -846,29 +587,7 @@ def iterate_and_fit_gaussians(x, y, z, max_basis_gaussians=MAX_BASIS_GAUSSIANS, 
         all_fits = fits
 
     # Plot all iterations of the fits with N Gaussians, including true Gaussians. bookmark here
-    for fit_idx, fit in enumerate(all_fits):
-        plt.figure(figsize=(8, 4))
-        plt.plot(x, y, 'b', label='Data with noise', zorder=1)
-
-        # Plot the true original Gaussians - cant in real data
-        # for i, g_true in enumerate(gaussians):
-        #    plt.plot(x, g_true, 'g-', label=f'True Gaussian {i}', alpha=0.7, zorder=2)
-
-        # Plot the individual fitted Gaussian components for this fit
-
-        #x axis from model to avoid array size errors
-        x_fit = fit.userkws['x']
-        for i in range(num_basis):
-            g_fit = fit.eval_components()[f'g{i}_']
-            plt.plot(x_fit, g_fit, label=f'Fitted Gaussian {i} in Fit {fit_idx}', linestyle='--', zorder=4)
-
-        # Plot the composite fit
-        plt.plot(x_fit, fit.best_fit, 'r-', label=f'Composite Fit {fit_idx}', zorder=3)
-        plt.title(f'Constituent and True Gaussians of N, Iteration: {lowest_bic_idx}, Fit: {fit_idx}')
-        plt.xlabel('X')
-        plt.ylabel('Y')
-        plt.legend()
-        plt.show()
+    dplt.plot_gaussian_iterations(x,y,all_fits, num_basis, lowest_bic_idx)
 
     # Identify the least impactful Gaussians and remove them
     #float is being truncated by converting to int. needs to be int
@@ -1057,9 +776,9 @@ def iterate_and_fit_gaussians(x, y, z, max_basis_gaussians=MAX_BASIS_GAUSSIANS, 
 
         reduced_derivative_params.add(f'g{i}_amplitude', value=derivative_amplitude_value,
                                       min=derivative_amplitude_value - (
-                                                  derivative_amplitude_value * PERCENTAGE_RANGE / 100),
+                                              derivative_amplitude_value * PERCENTAGE_RANGE / 100),
                                       max=derivative_amplitude_value + (
-                                                  derivative_amplitude_value * PERCENTAGE_RANGE / 100))
+                                              derivative_amplitude_value * PERCENTAGE_RANGE / 100))
 
         reduced_derivative_params.add(f'g{i}_sigma', value=derivative_sigma_value,
                                       min=derivative_sigma_value - (derivative_sigma_value * PERCENTAGE_RANGE / 100),

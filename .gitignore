@@ -1,3 +1,6 @@
+#process log
+mcd_process_log.txt
+
 ### VisualStudioCode template
 .vscode/*
 !.vscode/settings.json
