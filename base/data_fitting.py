@@ -67,8 +67,7 @@ def fit_gaussians(x, y, num_basis_gaussians, amplitudes, centers, sigmas):
         # Initialize parameters with bounds using `add()` method
         params.add(f'g{i}_center', value=centers[i], min=centers[i] - (centers[i] * PERCENT_RANGE_X / 100),
                    max=centers[i] + (centers[i] * PERCENTAGE_RANGE / 100), vary=VARY_CENTERS)  # Set bounds for center
-        params.add(f'g{i}_amplitude', value=amplitudes[i],
-                   min=0.0)  # min=amplitudes[i] - (amplitudes[i] * PERCENTAGE_RANGE), max=amplitudes[i] + (amplitudes[i] * PERCENTAGE_RANGE))           # Amplitude must be positive
+        params.add(f'g{i}_amplitude', value=amplitudes[i],min=0.0)  # min=amplitudes[i] - (amplitudes[i] * PERCENTAGE_RANGE), max=amplitudes[i] + (amplitudes[i] * PERCENTAGE_RANGE))           # Amplitude must be positive
         params.add(f'g{i}_sigma', value=sigmas[i])  # min=0, max=sigmas[i] + (sigmas[i] * PERCENTAGE_RANGE))            # Sigma must be positive, example upper bound
     result = model.fit(y, params, x=x)
     return result, model
@@ -186,14 +185,11 @@ def generate_initial_guesses(x, y, num_gaussians):
     y_smoothed = savgol_filter(y, window_length=WINDOW_LENGTH, polyorder=POLYORDER)
     #print(y_smoothed)
     # Calculate the numerical derivatives
-    d_y_smoothed = np.gradient(y_smoothed, x)
-    #print(d_y_smoothed)
+    d_y_smoothed = np.gradient(y_smoothed,x)
     # Calculate the 2nd numerical derivatives
     dd_y = np.gradient(d_y_smoothed, x)
-    #print(dd_y)
     dd_y_smoothed = np.gradient(d_y_smoothed, x)
     dd_y_smoothed = savgol_filter(dd_y_smoothed, window_length=WINDOW_LENGTH, polyorder=POLYORDER)
-
     # Find peaks in the negative second derivative (to locate the centers of Gaussians)
     prominence = PROMINENCE_PERECENT * np.nanmax(dd_y)
     height = HEIGHT_THRESHOLD * np.nanmax(dd_y)
@@ -206,7 +202,8 @@ def generate_initial_guesses(x, y, num_gaussians):
 
 
 
-    dd_y_peaks, _ = find_peaks(dd_y_smoothed, height=height, distance=DISTANCE, prominence=prominence)
+    dd_y_peaks_all, _ = find_peaks(dd_y_smoothed, height=height, distance=DISTANCE, prominence=prominence)
+    dd_y_peaks = filter_peaks_deltax(x, dd_y_peaks_all)
     peak_centers = x[dd_y_peaks]
     peak_amplitudes = y_smoothed[dd_y_peaks]
     # this would work if my gaussian is normalized to unit height. lets try writing this so that we are normalized to unit area. brb
@@ -239,7 +236,9 @@ def generate_initial_guesses_A(x, y, num_gaussians):
 
     # Find peaks in the negative second derivative (to locate the centers of Gaussians)
     prominence = PROMINENCE_PERECENT * max(d_y)
-    d_y_peaks, _ = find_peaks(-d_y_smoothed, height=HEIGHT_THRESHOLD, distance=DISTANCE, prominence=prominence)
+
+    d_y_peaks_all, _ = find_peaks(-d_y_smoothed, height=HEIGHT_THRESHOLD, distance=DISTANCE, prominence=prominence)
+    d_y_peaks = filter_peaks_deltax(x, d_y_peaks_all) #filter peaks by max peak delta x
 
     peak_centers = x[d_y_peaks]
     peak_amplitudes = y_smoothed[d_y_peaks]  # this wont work for a terms
@@ -388,8 +387,16 @@ def remove_least_impactful_gaussians_by_fit(x, y, result, num_basis, rss_thresho
 
     return least_impactful_gaussians
 
-
-# Function to compute and plot the numerical derivative of the "true" combined Gaussian curve
+def filter_peaks_deltax(x, peaks):
+    peak_list = list(peaks)
+    center_prev = x[peaks[0]] #last center because of ordering
+    #every peak but the first
+    for peak in peaks[1:]:
+        center = x[peak]
+        if center_prev-center < MIN_PEAK_X_DISTANCE:
+            peak_list.remove(peak)
+        center_prev = center
+    return np.array(peak_list)
 
 
 def iterate_and_fit_gaussians(x, y, z, max_basis_gaussians=MAX_BASIS_GAUSSIANS, num_guesses=NUM_GUESSES):

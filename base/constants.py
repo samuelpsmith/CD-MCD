@@ -28,6 +28,7 @@ PERCENTAGE_RANGE = 1  # The percentage by which the initial parameters will be a
 PERCENT_RANGE_X = 1
 TOLERANCE_X = 2  # how close centers can be as a percent of the overall x values and be considered the same.
 MAX_SIGMA = 1500 #max sigma for gaussians
+MIN_PEAK_X_DISTANCE = 0
 
 #basic
 SMALL_FWHM_FACTOR = 2.355  # Conversion factor from FWHM to sigma
