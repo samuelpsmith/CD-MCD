@@ -1,4 +1,7 @@
+import numpy
 import pandas as pd
+from matplotlib import pyplot as plt
+
 import MCD_process.base.data_processing as dp
 import numpy as np
 import MCD_process.base.utils.logger as logger
@@ -335,3 +338,59 @@ def plot_gaussian_iterations(x, y, all_fits, num_basis, lowest_bic_idx):
         plt.ylabel('Y')
         plt.legend()
         plt.show()
+def plot_true_combined_and_smoothed(x, y, y_smoothed, dd_y_smoothed, dd_y_peaks,  peak_centers, peak_amplitudes, peak_sigmas):
+    # Plot the true combined Gaussian curve and smoothed curve
+    plt.figure(figsize=(10, 6))
+    plt.plot(x, y, label='True Combined Gaussian Curve', color='blue', linewidth=2)
+    plt.plot(x, y_smoothed, label='Smoothed Combined Curve (y_smoothed)', color='green', linestyle='-', linewidth=2)
+
+    # Plot the numerical derivatives of the smoothed curve
+    plt.plot(x, -dd_y_smoothed, label='-1 * Numerical Derivative of y_smoothed', color='green', linestyle='--',
+             linewidth=2)
+    plt.scatter(x[dd_y_peaks], -dd_y_smoothed[dd_y_peaks], color='red', label='Detected Peaks')
+
+    # make lists for easy removal of elements
+    # Plot the initial guesses for each Gaussian curve
+    # Add title and labels
+
+    for center, amplitude, sigma in zip(peak_centers, peak_amplitudes, peak_sigmas):
+        #filter out by amplitude
+        gaussian_guess = amplitude * np.exp(-(x - center) ** 2 / (2 * sigma ** 2))
+        plt.plot(x, gaussian_guess, label=f'Gaussian guess: Center={center:.2f}, Sigma={sigma:.2f}', linestyle='--')
+    plt.title('True Combined Gaussian Curve, Smoothed Curve, and Their Derivatives')
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+
+def plot_true_curve_and_derivative(x, y):
+    derivative = np.gradient(y, x)
+    plt.figure(figsize=(8, 4))
+    plt.plot(x, y, label='Combined Gaussian Curve', color='blue')
+    plt.plot(x, derivative, label='Numerical Derivative of True Curve', color='orange', linestyle='--')
+    plt.title('True Combined Gaussian Curve and its Numerical Derivative')
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    plt.legend()
+    plt.show()
+def plot_xz_after_gaussian_removal(x,z,reduced_A_result,remaining_derivative_indices,impactful_gaussian_derivative_indices):
+    # Plot the fit after the least impactful Gaussians are removed
+    plt.figure(figsize=(8, 4))
+    plt.plot(x, z, 'b', label='Data', zorder=1)  # smoothed?
+
+    # Plot the individual Gaussian components of the new reduced fit
+    for i in remaining_derivative_indices:  # not sure if num basis is going to work here?
+        if i in impactful_gaussian_derivative_indices:
+            continue
+        dg_fit = reduced_A_result.eval_components()[f'g{i}_']
+        plt.plot(x, dg_fit, label=f'A-Term {i} after removal', linestyle='--', zorder=3)
+
+    # Plot the composite fit after removal
+    plt.plot(x, reduced_A_result.best_fit, 'r-', label='Composite Fit after removal', zorder=2)
+    plt.title('Fit after Removing Negligable terms.')
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    plt.legend()
+    plt.show()

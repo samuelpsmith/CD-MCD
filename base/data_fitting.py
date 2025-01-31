@@ -1,4 +1,3 @@
-import numpy as np
 import matplotlib.pyplot as plt
 from lmfit.models import GaussianModel
 import lmfit
@@ -71,27 +70,6 @@ def fit_gaussians(x, y, num_basis_gaussians, amplitudes, centers, sigmas):
         params.add(f'g{i}_amplitude', value=amplitudes[i],
                    min=0.0)  # min=amplitudes[i] - (amplitudes[i] * PERCENTAGE_RANGE), max=amplitudes[i] + (amplitudes[i] * PERCENTAGE_RANGE))           # Amplitude must be positive
         params.add(f'g{i}_sigma', value=sigmas[i])  # min=0, max=sigmas[i] + (sigmas[i] * PERCENTAGE_RANGE))            # Sigma must be positive, example upper bound
-        # Set center without bound - must either fix centers or very bounds by some small amount.
-        # params[f'g{i}_center'].set(centers[i], vary=True)
-
-        # Set amplitude and sigma with lower bounds to ensure they are positive
-        # params[f'g{i}_amplitude'].set(amplitudes[i], min=0)  # Amplitude must be positive
-        # params[f'g{i}_sigma'].set(sigmas[i])  # Sigma (width) must be positive
-
-        # Set new parameter with bounds ±10% - this gives us the ability to "anneal" the fit, relax params - EVEN WHEN NO CURVES ARE REMOVED.
-        # params.add(f'g{i}_center', value=centers[i],
-        #                   min=centers[i] - (centers[i] * PERCENTAGE_RANGE / 100),
-        #                   max=centers[i] + (centers[i] * PERCENTAGE_RANGE / 100),
-        #                   vary=False)
-
-        # params.add(f'g{i}_amplitude', value=amplitudes[i],
-        #                   min=amplitudes[i] - (amplitudes[i] * PERCENTAGE_RANGE / 100),
-        #                   max=amplitudes[i] + (amplitudes[i] * PERCENTAGE_RANGE / 100))
-
-        # params.add(f'g{i}_sigma', value=sigmas[i],
-        #                   min=sigmas[i] - (sigmas[i] * PERCENTAGE_RANGE / 100),
-        #                   max=sigmas[i] + (sigmas[i] * PERCENTAGE_RANGE / 100))
-
     result = model.fit(y, params, x=x)
     return result, model
 
@@ -121,26 +99,6 @@ def fit_gaussian_derivatives(x, y, num_basis_gaussians, amplitudes, centers, sig
         params.add(f'g{i}_sigma', value=sigmas[
             i])  # min=0, max=sigmas[i] + (sigmas[i] * PERCENTAGE_RANGE))            # Sigma must be positive, example upper bound
 
-        # Set center without bound - must either fix centers or very bounds by some small amount.
-        # params[f'g{i}_center'].set(centers[i], vary=True)
-
-        # Set amplitude and sigma with lower bounds to ensure they are positive
-        # params[f'g{i}_amplitude'].set(amplitudes[i], min=0)  # Amplitude must be positive
-        # params[f'g{i}_sigma'].set(sigmas[i])  # Sigma (width) must be positive
-
-        # Set new parameter with bounds ±10% - this gives us the ability to "anneal" the fit, relax params - EVEN WHEN NO CURVES ARE REMOVED.
-        # params.add(f'g{i}_center', value=centers[i],
-        #                   min=centers[i] - (centers[i] * PERCENTAGE_RANGE / 100),
-        #                   max=centers[i] + (centers[i] * PERCENTAGE_RANGE / 100),
-        #                   vary=False)
-
-        # params.add(f'g{i}_amplitude', value=amplitudes[i],
-        #                   min=amplitudes[i] - (amplitudes[i] * PERCENTAGE_RANGE / 100),
-        #                   max=amplitudes[i] + (amplitudes[i] * PERCENTAGE_RANGE / 100))
-
-        # params.add(f'g{i}_sigma', value=sigmas[i],
-        #                   min=sigmas[i] - (sigmas[i] * PERCENTAGE_RANGE / 100),
-        #                   max=sigmas[i] + (sigmas[i] * PERCENTAGE_RANGE / 100))
 
     result = model.fit(y, params, x=x)
     return result, model
@@ -166,28 +124,6 @@ def fit_gaussians_old(x, y, num_basis_gaussians, amplitudes, centers, sigmas):
                    min=0)  # min=amplitudes[i] - (amplitudes[i] * PERCENTAGE_RANGE), max=amplitudes[i] + (amplitudes[i] * PERCENTAGE_RANGE))           # Amplitude must be positive
         params.add(f'g{i}_sigma', value=sigmas[
             i])  # min=0, max=sigmas[i] + (sigmas[i] * PERCENTAGE_RANGE))            # Sigma must be positive, example upper bound
-
-        # Set center without bound - must either fix centers or very bounds by some small amount.
-        # params[f'g{i}_center'].set(centers[i], vary=True)
-
-        # Set amplitude and sigma with lower bounds to ensure they are positive
-        # params[f'g{i}_amplitude'].set(amplitudes[i], min=0)  # Amplitude must be positive
-        # params[f'g{i}_sigma'].set(sigmas[i])  # Sigma (width) must be positive
-
-        # Set new parameter with bounds ±10% - this gives us the ability to "anneal" the fit, relax params - EVEN WHEN NO CURVES ARE REMOVED.
-        # params.add(f'g{i}_center', value=centers[i],
-        #                   min=centers[i] - (centers[i] * PERCENTAGE_RANGE / 100),
-        #                   max=centers[i] + (centers[i] * PERCENTAGE_RANGE / 100),
-        #                   vary=False)
-
-        # params.add(f'g{i}_amplitude', value=amplitudes[i],
-        #                   min=amplitudes[i] - (amplitudes[i] * PERCENTAGE_RANGE / 100),
-        #                   max=amplitudes[i] + (amplitudes[i] * PERCENTAGE_RANGE / 100))
-
-        # params.add(f'g{i}_sigma', value=sigmas[i],
-        #                   min=sigmas[i] - (sigmas[i] * PERCENTAGE_RANGE / 100),
-        #                   max=sigmas[i] + (sigmas[i] * PERCENTAGE_RANGE / 100))
-
     result = model.fit(y, params, x=x)
     return result, model
 
@@ -288,36 +224,7 @@ def generate_initial_guesses(x, y, num_gaussians):
     print(f'Initial Guess Peak Sigmas: {peak_sigmas}')
     print(f'Intial Guess Peak Amplitudes: {peak_amplitudes}')
 
-    # Plot the true combined Gaussian curve and smoothed curve
-    plt.figure(figsize=(10, 6))
-    plt.plot(x, y, label='True Combined Gaussian Curve', color='blue', linewidth=2)
-    plt.plot(x, y_smoothed, label='Smoothed Combined Curve (y_smoothed)', color='green', linestyle='-', linewidth=2)
-
-    # Plot the numerical derivatives of the smoothed curve
-    plt.plot(x, -dd_y_smoothed, label='-1 * Numerical Derivative of y_smoothed', color='green', linestyle='--',
-             linewidth=2)
-    plt.scatter(x[dd_y_peaks], -dd_y_smoothed[dd_y_peaks], color='red', label='Detected Peaks')
-
-    #make lists for easy removal of elements
-    # Plot the initial guesses for each Gaussian curve
-    for center, amplitude, sigma in zip(peak_centers, peak_amplitudes, peak_sigmas):
-        #filter out by amplitude
-        gaussian_guess = amplitude * np.exp(-(x - center) ** 2 / (2 * sigma ** 2))
-        plt.plot(x, gaussian_guess, label=f'Gaussian guess: Center={center:.2f}, Sigma={sigma:.2f}', linestyle='--')
-
-    # Add title and labels
-    plt.title('True Combined Gaussian Curve, Smoothed Curve, and Their Derivatives')
-    plt.xlabel('X')
-    plt.ylabel('Y')
-    plt.legend()
-    plt.grid(True)
-    plt.show()
-
-    # Plot the numerical derivatives of the smoothed curve
-    plt.plot(x, -dd_y_smoothed, label='-1 * Numerical Derivative of y_smoothed', color='green', linestyle='--',
-             linewidth=2)
-    plt.scatter(x[dd_y_peaks], -dd_y_smoothed[dd_y_peaks], color='red', label='Detected Peaks')
-    plt.show()
+    dplt.plot_true_combined_and_smoothed(x,y,y_smoothed,dd_y_smoothed, dd_y_peaks, peak_centers, peak_amplitudes, peak_sigmas)
 
     return peak_amplitudes, peak_centers, peak_sigmas
 
@@ -354,33 +261,7 @@ def generate_initial_guesses_A(x, y, num_gaussians):
     print(f'Intial Guess Peak Amplitudes: {peak_amplitudes}')
 
     # Plot the true combined Gaussian curve and smoothed curve
-    plt.figure(figsize=(10, 6))
-    plt.plot(x, y, label='True Combined Gaussian Curve', color='blue', linewidth=2)
-    plt.plot(x, y_smoothed, label='Smoothed Combined Curve (y_smoothed)', color='green', linestyle='-', linewidth=2)
-
-    # Plot the numerical derivatives of the smoothed curve
-    plt.plot(x, -d_y_smoothed, label='-1 * Numerical Derivative of y_smoothed', color='green', linestyle='--',
-             linewidth=2)
-    plt.scatter(x[d_y_peaks], -d_y_smoothed[d_y_peaks], color='red', label='Detected Peaks')
-
-    # Plot the initial guesses for each Gaussian curve
-    for center, amplitude, sigma in zip(peak_centers, peak_amplitudes, peak_sigmas):
-        gaussian_guess = amplitude * np.exp(-(x - center) ** 2 / (2 * sigma ** 2))
-        plt.plot(x, gaussian_guess, label=f'Gaussian guess: Center={center:.2f}, Sigma={sigma:.2f}', linestyle='--')
-
-    # Add title and labels
-    plt.title('True Combined Gaussian Curve, Smoothed Curve, and Their Derivatives')
-    plt.xlabel('X')
-    plt.ylabel('Y')
-    plt.legend()
-    plt.grid(True)
-    plt.show()
-
-    # Plot the numerical derivatives of the smoothed curve
-    plt.plot(x, -d_y_smoothed, label='-1 * Numerical Derivative of y_smoothed', color='green', linestyle='--',
-             linewidth=2)
-    plt.scatter(x[d_y_peaks], -d_y_smoothed[d_y_peaks], color='red', label='Detected Peaks')
-    plt.show()
+    dplt.plot_true_combined_and_smoothed(x,y,y_smoothed,d_y_smoothed, d_y_peaks, peak_centers, peak_amplitudes, peak_sigmas)
 
     return peak_amplitudes, peak_centers, peak_sigmas
 
@@ -509,16 +390,6 @@ def remove_least_impactful_gaussians_by_fit(x, y, result, num_basis, rss_thresho
 
 
 # Function to compute and plot the numerical derivative of the "true" combined Gaussian curve
-def plot_true_curve_and_derivative(x, y):
-    derivative = np.gradient(y, x)
-    plt.figure(figsize=(8, 4))
-    plt.plot(x, y, label='Combined Gaussian Curve', color='blue')
-    plt.plot(x, derivative, label='Numerical Derivative of True Curve', color='orange', linestyle='--')
-    plt.title('True Combined Gaussian Curve and its Numerical Derivative')
-    plt.xlabel('X')
-    plt.ylabel('Y')
-    plt.legend()
-    plt.show()
 
 
 def iterate_and_fit_gaussians(x, y, z, max_basis_gaussians=MAX_BASIS_GAUSSIANS, num_guesses=NUM_GUESSES):
@@ -790,25 +661,8 @@ def iterate_and_fit_gaussians(x, y, z, max_basis_gaussians=MAX_BASIS_GAUSSIANS, 
 
     # Perform the fit again after removing the least impactful Gaussians
     reduced_A_result = reduced_derivative_model.fit(z, reduced_derivative_params, x=x)
-
-    # Plot the fit after the least impactful Gaussians are removed
-    plt.figure(figsize=(8, 4))
-    plt.plot(x, z, 'b', label='Data', zorder=1)  # smoothed?
-
-    # Plot the individual Gaussian components of the new reduced fit
-    for i in remaining_derivative_indices:  # not sure if num basis is going to work here?
-        if i in impactful_gaussian_derivative_indices:
-            continue
-        dg_fit = reduced_A_result.eval_components()[f'g{i}_']
-        plt.plot(x, dg_fit, label=f'A-Term {i} after removal', linestyle='--', zorder=3)
-
-    # Plot the composite fit after removal
-    plt.plot(x, reduced_A_result.best_fit, 'r-', label='Composite Fit after removal', zorder=2)
-    plt.title('Fit after Removing Negligable terms.')
-    plt.xlabel('X')
-    plt.ylabel('Y')
-    plt.legend()
-    plt.show()
+    #plot
+    dplt.plot_xz_after_gaussian_removal(x,z,reduced_A_result, remaining_derivative_indices, impactful_gaussian_derivative_indices)
 
     # Report the parameters of interest.
     print(f'A-Term Parameters: {reduced_A_result.params}')
