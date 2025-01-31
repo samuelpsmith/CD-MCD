@@ -1,6 +1,7 @@
 import numpy as np
 from lmfit import Model
 
+from MCD_process.base.constants import MAX_SIGMA
 from MCD_process.base.gaussians import stable_gaussian_derivative_sigma
 
 
@@ -28,8 +29,7 @@ class CustomGaussian_ddx_Model(Model):
         self.set_param_hint(
             'amplitude')  # Allow negative for inverted a term?  Amplitude is probably stritly positive but we might be able to allow negative values for optimization reasons.
         self.set_param_hint('center')
-        self.set_param_hint('sigma',
-                            min=0)  # Sigma must be positive - can remove to allow the optimizer to range over greater space easily?
+        self.set_param_hint('sigma',min=0, max=MAX_SIGMA)  # Sigma must be positive - can remove to allow the optimizer to range over greater space easily?
 
         # Expressions for derived parameters fwhm and height
         self.set_param_hint('fwhm', expr=f'{self.prefix}sigma * {self.fwhm_factor}')

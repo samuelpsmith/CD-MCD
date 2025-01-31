@@ -5,6 +5,8 @@ import MCD_process.base.utils.logger as logger
 import os
 import matplotlib.pyplot as plt
 
+from MCD_process.base.constants import MAX_SIGMA
+
 logging = logger.get_logger(__name__)
 
 def plot_data_old(
@@ -324,6 +326,8 @@ def plot_gaussian_iterations(x, y, all_fits, num_basis, lowest_bic_idx):
         x_fit = fit.userkws['x']
         for i in range(num_basis):
             g_fit = fit.eval_components()[f'g{i}_']
+            if(max(g_fit) < max(y)*MAX_SIGMA):
+                continue
             plt.plot(x_fit, g_fit, label=f'Fitted Gaussian {i} in Fit {fit_idx}', linestyle='--', zorder=4)
 
         # Plot the composite fit

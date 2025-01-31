@@ -69,10 +69,8 @@ def fit_gaussians(x, y, num_basis_gaussians, amplitudes, centers, sigmas):
         params.add(f'g{i}_center', value=centers[i], min=centers[i] - (centers[i] * PERCENT_RANGE_X / 100),
                    max=centers[i] + (centers[i] * PERCENTAGE_RANGE / 100), vary=VARY_CENTERS)  # Set bounds for center
         params.add(f'g{i}_amplitude', value=amplitudes[i],
-                   min=0)  # min=amplitudes[i] - (amplitudes[i] * PERCENTAGE_RANGE), max=amplitudes[i] + (amplitudes[i] * PERCENTAGE_RANGE))           # Amplitude must be positive
-        params.add(f'g{i}_sigma', value=sigmas[
-            i])  # min=0, max=sigmas[i] + (sigmas[i] * PERCENTAGE_RANGE))            # Sigma must be positive, example upper bound
-
+                   min=0.0)  # min=amplitudes[i] - (amplitudes[i] * PERCENTAGE_RANGE), max=amplitudes[i] + (amplitudes[i] * PERCENTAGE_RANGE))           # Amplitude must be positive
+        params.add(f'g{i}_sigma', value=sigmas[i])  # min=0, max=sigmas[i] + (sigmas[i] * PERCENTAGE_RANGE))            # Sigma must be positive, example upper bound
         # Set center without bound - must either fix centers or very bounds by some small amount.
         # params[f'g{i}_center'].set(centers[i], vary=True)
 
@@ -238,16 +236,19 @@ def estimate_sigma(x, y, peak_index):
         right_idx = len(y) - 1  # If no valid right index, use the end of the array
     else:
         right_idx = right_candidates[0] + peak_index
-
     fwhm = x[right_idx] - x[left_idx]
-    return abs(fwhm / SMALL_FWHM_FACTOR)  # Convert FWHM to sigma
+    sigma = abs(fwhm / SMALL_FWHM_FACTOR)
+    #cap sigma
+    if (sigma > MAX_SIGMA):
+        sigma = MAX_SIGMA
+    return sigma  # Convert FWHM to sigma
 
 
 # Function to generate initial guesses for Gaussian parameters
 def generate_initial_guesses(x, y, num_gaussians):
     # Smooth the noisy data
     y_smoothed = savgol_filter(y, window_length=WINDOW_LENGTH, polyorder=POLYORDER)
-    print(y_smoothed)
+    #print(y_smoothed)
     # Calculate the numerical derivatives
     d_y_smoothed = np.gradient(y_smoothed, x)
     #print(d_y_smoothed)
@@ -297,8 +298,10 @@ def generate_initial_guesses(x, y, num_gaussians):
              linewidth=2)
     plt.scatter(x[dd_y_peaks], -dd_y_smoothed[dd_y_peaks], color='red', label='Detected Peaks')
 
+    #make lists for easy removal of elements
     # Plot the initial guesses for each Gaussian curve
     for center, amplitude, sigma in zip(peak_centers, peak_amplitudes, peak_sigmas):
+        #filter out by amplitude
         gaussian_guess = amplitude * np.exp(-(x - center) ** 2 / (2 * sigma ** 2))
         plt.plot(x, gaussian_guess, label=f'Gaussian guess: Center={center:.2f}, Sigma={sigma:.2f}', linestyle='--')
 
@@ -538,14 +541,14 @@ def iterate_and_fit_gaussians(x, y, z, max_basis_gaussians=MAX_BASIS_GAUSSIANS, 
     # but cant fit more curves than we have guesses.
     fits = []
     #Center length is zero
-    print(len(centers))
+    #print(len(centers))
     for num_basis in range(1, len(centers) + 1):
         bic_list = []
         fits = []
 
         # Try multiple guesses -
         for guess in range(num_guesses):
-            print(sigmas[:num_basis])
+            #print(sigmas[:num_basis])
             result, model = fit_gaussians(x, y, num_basis, amplitudes[:num_basis], centers[:num_basis],sigmas[:num_basis])
             #rss = np.sum((y - result.best_fit) ** 2)
             # num_params = 3 * num_basis # because we have mu, gamma, amp? was used to calc bic but dont need
@@ -585,7 +588,6 @@ def iterate_and_fit_gaussians(x, y, z, max_basis_gaussians=MAX_BASIS_GAUSSIANS, 
         else:
             num_basis = 1
         all_fits = fits
-
     # Plot all iterations of the fits with N Gaussians, including true Gaussians. bookmark here
     dplt.plot_gaussian_iterations(x,y,all_fits, num_basis, lowest_bic_idx)
 
@@ -700,7 +702,7 @@ def iterate_and_fit_gaussians(x, y, z, max_basis_gaussians=MAX_BASIS_GAUSSIANS, 
                      vary=VARY_CENTERS)  # , min=centers[i] - (centers[i] * PERCENTAGE_RANGE / 100), max=centers[i] + (centers[i] * PERCENTAGE_RANGE / 100), vary=True)  # Set bounds for center
         A_params.add(f'g{i}_amplitude',
                      value=amplitude_value)  # min=amplitudes[i] - (amplitudes[i] * PERCENTAGE_RANGE), max=amplitudes[i] + (amplitudes[i] * PERCENTAGE_RANGE))           # Amplitude must be positive
-        A_params.add(f'g{i}_sigma', value=sigma_value)
+        A_params.add(f'g{i}_sigma', value=sigma_value, max=MAX_SIGMA)
 
         # Set new parameter with bounds ±10% - this gives us the ability to "anneal" the fit, relax params - EVEN WHEN NO CURVES ARE REMOVED.
         # params.add(f'g{i}_center', value=centers[i],
@@ -725,6 +727,8 @@ def iterate_and_fit_gaussians(x, y, z, max_basis_gaussians=MAX_BASIS_GAUSSIANS, 
     # Plot the individual fitted Gaussian derivative components for this fit
     for i in remaining_indices:
         dg_fit = A_result.eval_components()[f'g{i}_']
+        #print(A_result.params)
+        #Dont display terms with super large sigma
         plt.plot(x, dg_fit, label=f'Fitted Gaussian {i}', linestyle='--', zorder=3)
 
     # Plot the composite fit

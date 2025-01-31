@@ -1,6 +1,7 @@
 import numpy as np
 from lmfit import Model
 
+from MCD_process.base.constants import MAX_SIGMA
 from MCD_process.base.gaussians import stable_gaussian_sigma
 
 
@@ -28,11 +29,10 @@ class CustomGaussianModel(Model):
         """Set parameter hints for amplitude, center, sigma, fwhm, and height."""
         self.set_param_hint('amplitude', min=0)  # Amplitude must be positive
         self.set_param_hint('center')
-        self.set_param_hint('sigma', min=0)  # Sigma must be positive
+        self.set_param_hint('sigma', min=0, max=MAX_SIGMA)  # Sigma must be positive
 
         # Expressions for derived parameters fwhm and height
         self.set_param_hint('fwhm', expr=f'{self.prefix}sigma * {self.fwhm_factor}')
-        # self.set_param_hint('height', expr=f'{self.prefix}amplitude / ({self.prefix}sigma * {self.height_factor})') double check.
 
     def guess(self, data, x, negative=False, **kwargs):
         """
@@ -55,5 +55,4 @@ class CustomGaussianModel(Model):
 
         params = self.make_params(amplitude=amplitude_guess, center=center_guess, sigma=sigma_guess)
         return params
-
 
