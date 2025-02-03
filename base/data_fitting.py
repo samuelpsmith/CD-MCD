@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import numpy as np
 from lmfit.models import GaussianModel
 import lmfit
 from scipy.signal import find_peaks, savgol_filter
@@ -156,27 +157,33 @@ def generate_gaussians(x, num_gaussians=NUM_GAUSSIANS, noise_level=NOISE_LEVEL, 
 
     return y, gaussians
 
-
+#Function for finding some width at some ratio of max from peak - similar to FWHM
+def get_anymax_factor(ratio):
+    if (ratio >= 1): #return FWHM if ratio is invalid
+        print("full width any max has invalid ratio")
+        return SMALL_FWHM_FACTOR
+    else:
+        return np.sqrt(8*np.log(1/ratio))
 # Function to estimate sigma using FWHM
-def estimate_sigma(x, y, peak_index):
-    half_max = y[peak_index] / 2
-    left_candidates = np.where(y[:peak_index] < half_max)[0]
+def estimate_sigma(x, y, peak_index, ratio):
+    some_max = y[peak_index] * ratio
+    left_candidates = np.where(y[:peak_index] < some_max)[0]
     if len(left_candidates) == 0:
         left_idx = 0  # If no valid left index, use the start of the array
     else:
         left_idx = left_candidates[-1]
 
-    right_candidates = np.where(y[peak_index:] < half_max)[0]
+    right_candidates = np.where(y[peak_index:] < some_max)[0]
     if len(right_candidates) == 0:
         right_idx = len(y) - 1  # If no valid right index, use the end of the array
     else:
         right_idx = right_candidates[0] + peak_index
-    fwhm = x[right_idx] - x[left_idx]
-    sigma = abs(fwhm / SMALL_FWHM_FACTOR)
+    swsm = x[right_idx] - x[left_idx]
+    sigma = abs(swsm / get_anymax_factor(ratio)) # Convert to sigma
     #cap sigma
     if (sigma > MAX_SIGMA):
         sigma = MAX_SIGMA
-    return sigma  # Convert FWHM to sigma
+    return sigma
 
 
 # Function to generate initial guesses for Gaussian parameters
@@ -207,7 +214,7 @@ def generate_initial_guesses(x, y, num_gaussians):
     peak_centers = x[dd_y_peaks]
     peak_amplitudes = y_smoothed[dd_y_peaks]
     # this would work if my gaussian is normalized to unit height. lets try writing this so that we are normalized to unit area. brb
-    peak_sigmas = [estimate_sigma(x, y_smoothed, peak) for peak in dd_y_peaks]
+    peak_sigmas = [estimate_sigma(x, y_smoothed, peak, 1.0/4.0) for peak in dd_y_peaks]
     # estimating sigma from raw data is troublesome. Consider trying to do so from second derivative or solve analytically using peak height. Of course, the derivative would need to be normalzied.
 
     # If identified more peaks than needed, sort by amplitude and keep the strongest ones
@@ -245,7 +252,7 @@ def generate_initial_guesses_A(x, y, num_gaussians):
     # this would work if my gaussian is normalized to unit height.
     # going to need to get that special gaussian going. brb
     # might need to modify this to unit area and integrate.
-    peak_sigmas = [estimate_sigma(x, y_smoothed, peak) for peak in d_y_peaks]
+    peak_sigmas = [estimate_sigma(x, y_smoothed, peak, 1.0/4.0) for peak in d_y_peaks]
     # estimating sigma from raw data is troublesome. Consider trying to do so from second derivative or solve analytically using peak height. Of course, the derivative would need to be normalzied.
 
     # If identified more peaks than needed, sort by amplitude and keep the strongest ones
