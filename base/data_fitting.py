@@ -164,7 +164,7 @@ def get_anymax_factor(ratio):
         return SMALL_FWHM_FACTOR
     else:
         return np.sqrt(8*np.log(1/ratio))
-# Function to estimate sigma using FWHM
+# Function to estimate sigma
 def estimate_sigma(x, y, peak_index, ratio):
     some_max = y[peak_index] * ratio
     left_candidates = np.where(y[:peak_index] < some_max)[0]
@@ -184,8 +184,12 @@ def estimate_sigma(x, y, peak_index, ratio):
     if (sigma > MAX_SIGMA):
         sigma = MAX_SIGMA
     return sigma
-
-
+#estimates sigma for 1/10 max, 2/10 max, 3/10 max... up to 9/10 max
+def estimate_average_sigma(x, y, peak_index):
+    total = 0
+    for i in range(1, ESTIMATE_SIGMA_ITERATIONS - 1):
+        total += estimate_sigma(x,y,peak_index, i/ESTIMATE_SIGMA_ITERATIONS)
+    return total / (ESTIMATE_SIGMA_ITERATIONS - 1)
 # Function to generate initial guesses for Gaussian parameters
 def generate_initial_guesses(x, y, num_gaussians):
     # Smooth the noisy data
@@ -214,7 +218,7 @@ def generate_initial_guesses(x, y, num_gaussians):
     peak_centers = x[dd_y_peaks]
     peak_amplitudes = y_smoothed[dd_y_peaks]
     # this would work if my gaussian is normalized to unit height. lets try writing this so that we are normalized to unit area. brb
-    peak_sigmas = [estimate_sigma(x, y_smoothed, peak, 1.0/4.0) for peak in dd_y_peaks]
+    peak_sigmas = [estimate_average_sigma(x, y_smoothed, peak) for peak in dd_y_peaks]
     # estimating sigma from raw data is troublesome. Consider trying to do so from second derivative or solve analytically using peak height. Of course, the derivative would need to be normalzied.
 
     # If identified more peaks than needed, sort by amplitude and keep the strongest ones
@@ -252,7 +256,7 @@ def generate_initial_guesses_A(x, y, num_gaussians):
     # this would work if my gaussian is normalized to unit height.
     # going to need to get that special gaussian going. brb
     # might need to modify this to unit area and integrate.
-    peak_sigmas = [estimate_sigma(x, y_smoothed, peak, 1.0/4.0) for peak in d_y_peaks]
+    peak_sigmas = [estimate_average_sigma(x, y_smoothed, peak) for peak in d_y_peaks]
     # estimating sigma from raw data is troublesome. Consider trying to do so from second derivative or solve analytically using peak height. Of course, the derivative would need to be normalzied.
 
     # If identified more peaks than needed, sort by amplitude and keep the strongest ones
