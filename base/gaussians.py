@@ -1,5 +1,5 @@
 import numpy as np
-from MCD_process.base.constants import tiny, s2pi
+from .constants import tiny, s2pi
 
 
 

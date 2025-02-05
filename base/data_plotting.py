@@ -2,13 +2,11 @@ import numpy
 import pandas as pd
 from matplotlib import pyplot as plt
 
-import MCD_process.base.data_processing as dp
+from . import data_processing as dp
 import numpy as np
-import MCD_process.base.utils.logger as logger
+from .utils import logger as logger
 import os
 import matplotlib.pyplot as plt
-
-from MCD_process.base.constants import MAX_SIGMA
 
 logging = logger.get_logger(__name__)
 

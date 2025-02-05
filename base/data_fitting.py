@@ -5,11 +5,11 @@ import lmfit
 from scipy.signal import find_peaks, savgol_filter
 import pandas as pd
 import os
-import data_plotting as dplt
-from MCD_process.base.CustomGaussianModel import CustomGaussianModel
-from MCD_process.base.CustomGaussian_ddx_Model import CustomGaussian_ddx_Model
-from MCD_process.base.constants import *
-from MCD_process.base.gaussians import gaussian
+from . import data_plotting as dplt
+from .CustomGaussianModel import CustomGaussianModel
+from .CustomGaussian_ddx_Model import CustomGaussian_ddx_Model
+from .constants import *
+from .gaussians import gaussian
 
 # Define all the constants
 
@@ -181,9 +181,7 @@ def estimate_sigma(x, y, peak_index, ratio):
     swsm = x[right_idx] - x[left_idx]
     sigma = abs(swsm / get_anymax_factor(ratio)) # Convert to sigma
     #cap sigma
-    if (sigma > MAX_SIGMA):
-        sigma = MAX_SIGMA
-    return sigma
+    return min(sigma, MAX_SIGMA)
 #estimates sigma for 1/10 max, 2/10 max, 3/10 max... up to 9/10 max
 def estimate_average_sigma(x, y, peak_index):
     total = 0
@@ -213,7 +211,8 @@ def generate_initial_guesses(x, y, num_gaussians):
 
 
 
-    dd_y_peaks_all, _ = find_peaks(dd_y_smoothed, height=height, distance=DISTANCE, prominence=prominence)
+    dd_y_peaks_all, _ = find_peaks(-dd_y_smoothed, height=height, distance=DISTANCE, prominence=prominence)
+    print(dd_y_smoothed)
     dd_y_peaks = filter_peaks_deltax(x, dd_y_peaks_all)
     peak_centers = x[dd_y_peaks]
     peak_amplitudes = y_smoothed[dd_y_peaks]
@@ -365,7 +364,7 @@ def remove_least_impactful_gaussians_by_fit(x, y, result, num_basis, rss_thresho
                 reduced_params.add(f'{param_prefix}amplitude', value=result.params[f'{param_prefix}amplitude'].value,
                                    vary=False)
                 reduced_params.add(f'{param_prefix}sigma', value=result.params[f'{param_prefix}sigma'].value,
-                                   vary=False)
+                                   vary=False, max=MAX_SIGMA)
 
         if reduced_model:
             reduced_result = reduced_model.fit(y, reduced_params, x=x)
@@ -401,16 +400,20 @@ def remove_least_impactful_gaussians_by_fit(x, y, result, num_basis, rss_thresho
 def filter_peaks_deltax(x, peaks):
     peak_list = list(peaks)
     center_prev = x[peaks[0]] #last center because of ordering
+    prev_peak = peaks[0]
     #every peak but the first
     for peak in peaks[1:]:
         center = x[peak]
         if center_prev-center < MIN_PEAK_X_DISTANCE:
             peak_list.remove(peak)
+            if prev_peak in peak_list:
+                peak_list.remove(prev_peak)
         center_prev = center
+        prev_peak = peak
     return np.array(peak_list)
 
 
-def iterate_and_fit_gaussians(x, y, z, max_basis_gaussians=MAX_BASIS_GAUSSIANS, num_guesses=NUM_GUESSES):
+def iterate_and_fit_gaussians(x, y, z, mcd_df, max_basis_gaussians=MAX_BASIS_GAUSSIANS, num_guesses=NUM_GUESSES):
     #remove NAN to avoid conflics with lmfit
 
     # we passsed the gaussians to this function so that we can visualize them, but they arent required for fitting obvs.
@@ -717,7 +720,7 @@ def iterate_and_fit_gaussians(x, y, z, max_basis_gaussians=MAX_BASIS_GAUSSIANS, 
 
 
 # Main Execution (Reading from CSV)
-if __name__ == "__main__":
+def main():
     file_path = "/Users/westo/Downloads/PtTrans/PtTrans/processed_data/PtTrans_processed.csv"
     file_directory = os.path.dirname(file_path)
     base_name = os.path.basename(file_path).replace("__processed.csv", "")
@@ -748,7 +751,7 @@ if __name__ == "__main__":
     z = scaled_mcd[mask]
 
     # Perform Gaussian fitting on the data from the CSV
-    df = iterate_and_fit_gaussians(x, y, z)
+    df = iterate_and_fit_gaussians(x, y, z, mcd_df)
 
     print(f'Saving output to: {save_file_path}')
     # Save the DataFrame (df) to the new CSV file

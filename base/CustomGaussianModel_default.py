@@ -1,7 +1,8 @@
 import numpy as np
 from lmfit import Model
 
-from MCD_process.base.constants import MAX_SIGMA
+from .constants import MAX_SIGMA
+from .gaussians import custom_gaussian
 
 
 class CustomGaussianModel_default(Model):

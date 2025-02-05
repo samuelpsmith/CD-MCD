@@ -3,7 +3,7 @@
 #cleans and interpolates data
 #
 #
-import MCD_process.base.utils.logger as logger
+from .utils import logger as logger
 import numpy as np
 import pandas as pd
 from scipy.interpolate import make_interp_spline, interp1d

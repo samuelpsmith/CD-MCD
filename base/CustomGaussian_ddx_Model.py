@@ -1,8 +1,8 @@
 import numpy as np
 from lmfit import Model
 
-from MCD_process.base.constants import MAX_SIGMA
-from MCD_process.base.gaussians import stable_gaussian_derivative_sigma
+from .constants import MAX_SIGMA
+from .gaussians import stable_gaussian_derivative_sigma
 
 
 class CustomGaussian_ddx_Model(Model):
