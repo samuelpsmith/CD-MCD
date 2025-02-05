@@ -69,7 +69,7 @@ def fit_gaussians(x, y, num_basis_gaussians, amplitudes, centers, sigmas):
         params.add(f'g{i}_center', value=centers[i], min=centers[i] - (centers[i] * PERCENT_RANGE_X / 100),
                    max=centers[i] + (centers[i] * PERCENTAGE_RANGE / 100), vary=VARY_CENTERS)  # Set bounds for center
         params.add(f'g{i}_amplitude', value=amplitudes[i],min=0.0)  # min=amplitudes[i] - (amplitudes[i] * PERCENTAGE_RANGE), max=amplitudes[i] + (amplitudes[i] * PERCENTAGE_RANGE))           # Amplitude must be positive
-        params.add(f'g{i}_sigma', value=sigmas[i])  # min=0, max=sigmas[i] + (sigmas[i] * PERCENTAGE_RANGE))            # Sigma must be positive, example upper bound
+        params.add(f'g{i}_sigma', value=sigmas[i], max=MAX_SIGMA)  # min=0, max=sigmas[i] + (sigmas[i] * PERCENTAGE_RANGE))            # Sigma must be positive, example upper bound
     result = model.fit(y, params, x=x)
     return result, model
 
