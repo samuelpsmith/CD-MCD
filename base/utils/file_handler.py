@@ -1,5 +1,5 @@
 from collections import defaultdict
-from base.utils import logger
+from . import logger
 import json
 import os
 import tkinter as tk
@@ -27,8 +27,15 @@ def load_json(file_path: str) -> dict:
     except Exception as e:
         logging.error(f"Unexpected error loading JSON file: {e}")
         raise
-
-def select_files() -> defaultdict:
+#returns filepath from file explorer selection
+def select_processed_file():
+    root = tk.Tk()
+    root.withdraw()
+    file_path = filedialog.askopenfilename(
+        title="Select processed file"
+    )
+    return file_path
+def select_files_processing() -> defaultdict:
     root = tk.Tk()
     root.withdraw()
     file_paths = filedialog.askopenfilenames(

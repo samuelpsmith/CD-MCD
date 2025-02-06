@@ -27,7 +27,7 @@ THRESHOLD_PERCENT = 0.1  # Threshold under which a basis curve is not contributi
 PERCENTAGE_RANGE = 1  # The percentage by which the initial parameters will be allowed to relax on re-fitting after removing poor curves.
 PERCENT_RANGE_X = 1
 TOLERANCE_X = 2  # how close centers can be as a percent of the overall x values and be considered the same.
-MAX_SIGMA = 1500 #max sigma for gaussians
+MAX_SIGMA = 60000 #max sigma for gaussians
 MIN_PEAK_X_DISTANCE = 0
 ESTIMATE_SIGMA_ITERATIONS = 10 #1/n max 2/n max, 3/n max ... (n-1)/n.. like FWHM
 

@@ -190,7 +190,7 @@ def main():
         config_path = os.path.join(script_dir, "config.json")
         abs_data = fh.load_json(abs_data_path)
         config = fh.load_json(config_path)
-        file_dict = fh.select_files()
+        file_dict = fh.select_files_processing()
         if file_dict:
             process_files(file_dict, config, abs_data)
         else:

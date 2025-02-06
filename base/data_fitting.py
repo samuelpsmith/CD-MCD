@@ -10,6 +10,7 @@ from .CustomGaussianModel import CustomGaussianModel
 from .CustomGaussian_ddx_Model import CustomGaussian_ddx_Model
 from .constants import *
 from .gaussians import gaussian
+from .utils import file_handler as fh
 
 # Define all the constants
 
@@ -721,7 +722,7 @@ def iterate_and_fit_gaussians(x, y, z, mcd_df, max_basis_gaussians=MAX_BASIS_GAU
 
 # Main Execution (Reading from CSV)
 def main():
-    file_path = "/Users/westo/Downloads/PtTrans/PtTrans/processed_data/PtTrans_processed.csv"
+    file_path = fh.select_processed_file()
     file_directory = os.path.dirname(file_path)
     base_name = os.path.basename(file_path).replace("__processed.csv", "")
     save_file_path = os.path.join(file_directory, f"{base_name}_A_term.csv")
