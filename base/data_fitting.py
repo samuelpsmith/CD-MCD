@@ -179,16 +179,18 @@ def estimate_sigma(x, y, peak_index, ratio):
         right_idx = len(y) - 1  # If no valid right index, use the end of the array
     else:
         right_idx = right_candidates[0] + peak_index
-    swsm = x[right_idx] - x[left_idx]
-    sigma = abs(swsm / get_anymax_factor(ratio)) # Convert to sigma
+    fwam = x[right_idx] - x[left_idx]
+    sigma = abs(fwam / get_anymax_factor(ratio)) # Convert to sigma
     #cap sigma
     return min(sigma, MAX_SIGMA)
 #estimates sigma for 1/10 max, 2/10 max, 3/10 max... up to 9/10 max
 def estimate_average_sigma(x, y, peak_index):
     total = 0
-    for i in range(1, ESTIMATE_SIGMA_ITERATIONS - 1):
-        total += estimate_sigma(x,y,peak_index, i/ESTIMATE_SIGMA_ITERATIONS)
-    return total / (ESTIMATE_SIGMA_ITERATIONS - 1)
+    count = 0
+    for i in range(ESTIMATE_SIGMA_ITERATIONS_START, ESTIMATE_SIGMA_ITERATIONS_END - 1):
+        total += estimate_sigma(x,y,peak_index, i/ESTIMATE_SIGMA_ITERATIONS_END)
+        count += 1
+    return (total/count)
 # Function to generate initial guesses for Gaussian parameters
 def generate_initial_guesses(x, y, num_gaussians):
     # Smooth the noisy data

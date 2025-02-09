@@ -29,7 +29,8 @@ PERCENT_RANGE_X = 1
 TOLERANCE_X = 2  # how close centers can be as a percent of the overall x values and be considered the same.
 MAX_SIGMA = 60000 #max sigma for gaussians
 MIN_PEAK_X_DISTANCE = 0
-ESTIMATE_SIGMA_ITERATIONS = 10 #1/n max 2/n max, 3/n max ... (n-1)/n.. like FWHM
+ESTIMATE_SIGMA_ITERATIONS_END = 10 #START/END to END-1/END
+ESTIMATE_SIGMA_ITERATIONS_START = 4
 
 #basic
 SMALL_FWHM_FACTOR = 2.355  # Conversion factor from FWHM to sigma
