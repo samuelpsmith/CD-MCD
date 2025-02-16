@@ -17,8 +17,7 @@ def plot_data_old(
         mord_df: pd.DataFrame,
         config: dict,
         output_file_path: str,
-        sticks_df: pd.DataFrame = None,
-) -> None:
+        sticks_df: pd.DataFrame = None,) -> None:
     """Plot the MCD, absorption, and MORD data.
 
     Args:
@@ -391,4 +390,68 @@ def plot_xz_after_gaussian_removal(x,z,reduced_A_result,remaining_derivative_ind
     plt.xlabel('X')
     plt.ylabel('Y')
     plt.legend()
+    plt.show()
+def plot_A_terms(x,z, A_result, remaining_indices):
+    plt.figure(figsize=(8, 4))
+    plt.plot(x, z, 'b', label='Data with noise', zorder=1)
+
+    # Plot the individual fitted Gaussian derivative components for this fit
+    for i in remaining_indices:
+        dg_fit = A_result.eval_components()[f'g{i}_']
+        # print(A_result.params)
+        # Dont display terms with super large sigma
+        plt.plot(x, dg_fit, label=f'Fitted Gaussian {i}', linestyle='--', zorder=3)
+
+    # Plot the composite fit
+    plt.plot(x, A_result.best_fit, 'r-', label=f'Composite Fit', zorder=2)
+    plt.title(f'MCD initial fit')
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    plt.legend()
+    plt.show()
+def plot_reduced_result(x, y, num_basis, reduced_result, impactful_gaussian_indices):
+    # Plot the fit after the least impactful Gaussians are removed
+    plt.figure(figsize=(8, 4))
+    plt.plot(x, y, 'b', label='Data with noise', zorder=1)
+
+    # Plot the true original Gaussians again
+    # for i, g_true in enumerate(gaussians):
+    #    plt.plot(x, g_true, 'g-', label=f'True Gaussian {i}', alpha=0.7, zorder=2)
+
+    # Plot the individual Gaussian components of the new reduced fit
+    for i in range(num_basis):
+        if i in impactful_gaussian_indices:
+            continue
+        g_fit = reduced_result.eval_components()[f'g{i}_']
+        plt.plot(x, g_fit, label=f'Gaussian {i} after removal', linestyle='--', zorder=4)
+
+    # Plot the composite fit after removal
+    plt.plot(x, reduced_result.best_fit, 'r-', label='Composite Fit after removal', zorder=3)
+    plt.title('Fit after Removing the Least Impactful Gaussians')
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    plt.legend()
+    plt.show()
+
+def plot_bic(avg_bic_values, avg_delta_bic_values):
+    # Plot average BIC values
+    plt.figure(figsize=(8, 4))
+    plt.plot(range(1, len(avg_bic_values) + 1), avg_bic_values, marker='o', color='purple')
+    plt.title('Average BIC as a function of number of Gaussians')
+    plt.xlabel('Number of basis Gaussians')
+    plt.ylabel('Average BIC')
+    plt.show()
+
+    # Plot delta BIC values
+    plt.figure(figsize=(8, 4))
+    if avg_delta_bic_values:
+        plt.plot(range(2, len(avg_delta_bic_values) + 2), avg_delta_bic_values, marker='o', color='orange')
+        plt.title('Delta BIC as a function of number of Gaussians')
+        plt.xlabel('Number of basis Gaussians')
+        plt.ylabel('Delta BIC')
+        plt.show()
+def plot_raw_df(mcd_df):
+    plt.plot(mcd_df['wavenumber'], mcd_df['intensity'])
+    plt.show()
+    plt.plot(mcd_df['wavenumber'], mcd_df['R_signed'])  # To make sure things are scaling.
     plt.show()

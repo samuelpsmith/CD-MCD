@@ -3,7 +3,12 @@
 #cleans and interpolates data
 #
 #
-from .utils import logger as logger
+import os
+from collections import defaultdict
+from tkinter import messagebox
+
+from . import data_plotting as dplt
+from .utils import logger as logger, file_handler as fh
 import numpy as np
 import pandas as pd
 from scipy.interpolate import make_interp_spline, interp1d
@@ -204,3 +209,169 @@ def index_to_xdata(xdata, indices):
     f = interp1d(ind, xdata)
     return f(indices)
 
+
+def process_files(file_dict: defaultdict, config: dict, abs_data: dict):
+    # here I am explicitly defining column names because the data comes unlabelled.
+    column_names_pos = [
+        "wavelength",
+        "x_pos",
+        "y_pos",
+        "R",
+        "theta",
+        "std_dev_x",
+        "std_dev_y",
+        "additional",
+    ]
+    column_names_neg = [
+        "wavelength",
+        "x_neg",
+        "y_neg",
+        "R",
+        "theta",
+        "std_dev_x",
+        "std_dev_y",
+        "additional",
+    ]
+    column_names_abs = ["wavelength", "intensity"]
+    column_names_sticks = ["wavelength", "strength"]
+
+    for base_name, files in file_dict.items():
+        if "pos" in files and "neg" in files and "abs" in files:
+            pos_file = files["pos"]
+            neg_file = files["neg"]
+            abs_file = files["abs"]
+            sticks_file = files.get("sticks", None)
+            logging.info(
+                f"Processing files: {pos_file}, {neg_file}, {abs_file}, and {sticks_file}"
+            )
+            # read all those files in unless we dont have a sticks file then skip sticks
+
+            positive_df = fh.read_csv_file(pos_file, column_names_pos)
+            negative_df = fh.read_csv_file(neg_file, column_names_neg)
+            abs_df = fh.read_csv_file(abs_file, column_names_abs)
+            sticks_df = (
+                fh.read_csv_file(sticks_file, column_names_sticks) if sticks_file else None
+            )
+
+            if (
+                    positive_df is not None
+                    and negative_df is not None
+                    and abs_df is not None
+            ):
+                try:
+                    abs_df_copy = abs_df.copy()
+                    # pass by ref vs pass by value.
+
+                    # I dont know that we ever really want to look at this in units of abs? consider changing?
+
+                    if config["convert_to_extinction"]:
+                        print("convert to extinction is true (abs)")
+                        abs_df_copy = convert_abs_to_extinction(
+                            abs_df_copy,
+                            os.path.basename(abs_file),
+                            abs_data,
+                            ["intensity"],
+                        )
+
+                    x_diff, y_diff, x_stdev, y_stdev, R_signed, R_stdev = (
+                        calculate_differences(positive_df, negative_df)
+                    )
+
+                    mcd_df = pd.DataFrame(
+                        {
+                            "wavelength": positive_df["wavelength"],
+                            "R_signed": R_signed,
+                            "std_dev": R_stdev,
+                        }
+                    )
+
+                    if config["convert_to_extinction"]:
+                        print("convert to extinction is true (MCD_process)")
+                        mcd_df = convert_abs_to_extinction(
+                            mcd_df,
+                            os.path.basename(abs_file),  # whats goin on here?
+                            abs_data,
+                            ["R_signed", "std_dev"],
+                        )
+
+                    R_signed_averaged_filled = (
+                        mcd_df[
+                            "R_signed_extinction"]  # this is bad. This is a bad idea and we gotta not do this anymore.
+                        .rolling(window=3, center=True)
+                        .mean()
+                        .fillna(mcd_df["R_signed_extinction"])
+                    )  # we DO need to fill in NaNs, but we ought not to rolling average data anymore.
+
+                    wavenumber_cm1 = 1e7 / mcd_df[
+                        "wavelength"].values  # gotta convert to wavenumber to do kramers kronig.
+                    mord_spectrum = kk_arbspace(
+                        wavenumber_cm1, mcd_df["R_signed_extinction"].values, alpha=0
+                    )  # should I used the fillna to handle null values before this?
+
+                    mord_df = pd.DataFrame(
+                        {
+                            "wavelength": mcd_df["wavelength"],
+                            "mord": mord_spectrum,
+                            "std_dev": mcd_df["std_dev_extinction"],
+                        }
+                    )
+
+                    base_path = os.path.dirname(pos_file)
+                    output_dir = fh.create_output_directory(base_path)
+                    output_file_path = os.path.join(
+                        output_dir, base_name + "processed.csv"
+                    )
+                    print("outputting to:", output_file_path)
+
+                    if sticks_df is not None:
+                        max_absorbance = abs_df_copy["intensity_extinction"].max()
+                        sticks_df = scale_sticks(sticks_df, max_absorbance)
+                        sticks_column = sticks_df["scaled_strength"]
+                    else:
+                        sticks_column = pd.Series(
+                            [None] * len(mcd_df["wavelength"]), index=mcd_df.index
+                        )
+
+                    # fitting goes here. fitted_params = fit_peaks_seperately_old(abs_df_copy, mcd_df, column='intensity_extinction', height_percent=1, lorentz_frac=0.5)
+
+                    # change to new plot data function
+                    dplt.plot_data_old(
+                        base_name,
+                        mcd_df,
+                        abs_df_copy,
+                        mord_df,
+                        config,
+                        output_file_path,
+                        sticks_df,
+                    )
+
+                    print("sticks_df:", sticks_df)
+
+                    fh.save_data(
+                        output_file_path,
+                        mcd_df,
+                        abs_df_copy,
+                        mord_df,
+                        sticks_df,
+                    )
+
+                except Exception as e:
+                    logging.error(
+                        f"Error processing files {pos_file}, {neg_file}, {abs_file}, and {sticks_file}: {e}"
+                    )
+                    messagebox.showerror("Processing Error", f"An error occurred: {e}")
+            else:
+                logging.error(
+                    f"One or more DataFrames for files {pos_file}, {neg_file}, {abs_file} are None"
+                )
+        else:
+            missing_types = [
+                ftype for ftype in ["pos", "neg", "abs"] if ftype not in files
+            ]
+            logging.error(
+                f"Missing {', '.join(missing_types)} file(s) for base name {base_name}"
+            )
+            messagebox.showerror(
+                "File Pairing Error",
+                f"Missing {', '.join(missing_types)} file(s) for base name {base_name}",
+            )

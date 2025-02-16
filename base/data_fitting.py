@@ -1,16 +1,12 @@
-import matplotlib.pyplot as plt
-import numpy as np
 from lmfit.models import GaussianModel
 import lmfit
 from scipy.signal import find_peaks, savgol_filter
 import pandas as pd
-import os
 from . import data_plotting as dplt
 from .CustomGaussianModel import CustomGaussianModel
 from .CustomGaussian_ddx_Model import CustomGaussian_ddx_Model
 from .constants import *
-from .gaussians import gaussian
-from .utils import file_handler as fh
+
 
 # Define all the constants
 
@@ -130,33 +126,6 @@ def fit_gaussians_old(x, y, num_basis_gaussians, amplitudes, centers, sigmas):
 
 
 # Function to generate multiple Gaussians with added noise
-def generate_gaussians(x, num_gaussians=NUM_GAUSSIANS, noise_level=NOISE_LEVEL, seed=SEED, min_distance=MIN_DISTANCE):
-    y = np.zeros_like(x)
-    gaussians = []  # Store each Gaussian component
-    centers = []  # To track centers of generated Gaussians
-    np.random.seed(seed)  # For reproducibility
-
-    for _ in range(num_gaussians):
-        # Generate a random center and ensure it's at least `min_distance` away from existing centers
-        while True:
-            center = np.random.uniform(x.min(), x.max())
-            if all(abs(center - c) >= min_distance for c in centers):
-                centers.append(center)
-                break
-
-        # Generate random amplitude and width for the Gaussian
-        amplitude = np.random.uniform(0.5, 1.5)
-        width = np.random.uniform(1, 3)
-
-        # Create the Gaussian and add it to the total signal
-        g = gaussian(x, amplitude, center, width)
-        gaussians.append(g)
-        y += g
-
-    # Add white noise
-    y += np.random.normal(0, noise_level, size=x.shape)
-
-    return y, gaussians
 
 #Function for finding some width at some ratio of max from peak - similar to FWHM
 def get_anymax_factor(ratio):
@@ -215,7 +184,7 @@ def generate_initial_guesses(x, y, num_gaussians):
 
 
     dd_y_peaks_all, _ = find_peaks(-dd_y_smoothed, height=height, distance=DISTANCE, prominence=prominence)
-    print(dd_y_smoothed)
+    #print(dd_y_smoothed)
     dd_y_peaks = filter_peaks_deltax(x, dd_y_peaks_all)
     peak_centers = x[dd_y_peaks]
     peak_amplitudes = y_smoothed[dd_y_peaks]
@@ -451,7 +420,7 @@ def iterate_and_fit_gaussians(x, y, z, mcd_df, max_basis_gaussians=MAX_BASIS_GAU
             print(f'result.bic:{bic}')
             bic_list.append(bic)
             fits.append(result)
-            print(len(fits)+1)
+            #print(len(fits)+1)
 
         avg_bic = np.mean(
             bic_list)  # because I assume I am taking multiple guesses - but I have been limiting number of guesses to 1 so the average of 1 number is itself.
@@ -531,45 +500,9 @@ def iterate_and_fit_gaussians(x, y, z, mcd_df, max_basis_gaussians=MAX_BASIS_GAU
     # Perform the fit again after removing the least impactful Gaussians
     reduced_result = reduced_model.fit(y, reduced_params, x=x)
 
-    # Plot the fit after the least impactful Gaussians are removed
-    plt.figure(figsize=(8, 4))
-    plt.plot(x, y, 'b', label='Data with noise', zorder=1)
+    dplt.plot_reduced_result(x, y, num_basis, reduced_result, impactful_gaussian_indices)
 
-    # Plot the true original Gaussians again
-    # for i, g_true in enumerate(gaussians):
-    #    plt.plot(x, g_true, 'g-', label=f'True Gaussian {i}', alpha=0.7, zorder=2)
-
-    # Plot the individual Gaussian components of the new reduced fit
-    for i in range(num_basis):
-        if i in impactful_gaussian_indices:
-            continue
-        g_fit = reduced_result.eval_components()[f'g{i}_']
-        plt.plot(x, g_fit, label=f'Gaussian {i} after removal', linestyle='--', zorder=4)
-
-    # Plot the composite fit after removal
-    plt.plot(x, reduced_result.best_fit, 'r-', label='Composite Fit after removal', zorder=3)
-    plt.title('Fit after Removing the Least Impactful Gaussians')
-    plt.xlabel('X')
-    plt.ylabel('Y')
-    plt.legend()
-    plt.show()
-
-    # Plot average BIC values
-    plt.figure(figsize=(8, 4))
-    plt.plot(range(1, len(avg_bic_values) + 1), avg_bic_values, marker='o', color='purple')
-    plt.title('Average BIC as a function of number of Gaussians')
-    plt.xlabel('Number of basis Gaussians')
-    plt.ylabel('Average BIC')
-    plt.show()
-
-    # Plot delta BIC values
-    plt.figure(figsize=(8, 4))
-    if avg_delta_bic_values:
-        plt.plot(range(2, len(avg_delta_bic_values) + 2), avg_delta_bic_values, marker='o', color='orange')
-        plt.title('Delta BIC as a function of number of Gaussians')
-        plt.xlabel('Number of basis Gaussians')
-        plt.ylabel('Delta BIC')
-        plt.show()
+    dplt.plot_bic(avg_bic_values, avg_delta_bic_values)
 
     ### Use fit values as initial guesses for A term fitting. ###
 
@@ -613,31 +546,14 @@ def iterate_and_fit_gaussians(x, y, z, mcd_df, max_basis_gaussians=MAX_BASIS_GAU
         #                   min=sigmas[i] - (sigmas[i] * PERCENTAGE_RANGE / 100),
         #                   max=sigmas[i] + (sigmas[i] * PERCENTAGE_RANGE / 100))
 
-    print(f"Fitting A-terms with initial guesses: {A_params}...")
     A_result = A_model.fit(z, A_params, x=x)
-
-    plt.figure(figsize=(8, 4))
-    plt.plot(x, z, 'b', label='Data with noise', zorder=1)
-
-    # Plot the individual fitted Gaussian derivative components for this fit
-    for i in remaining_indices:
-        dg_fit = A_result.eval_components()[f'g{i}_']
-        #print(A_result.params)
-        #Dont display terms with super large sigma
-        plt.plot(x, dg_fit, label=f'Fitted Gaussian {i}', linestyle='--', zorder=3)
-
-    # Plot the composite fit
-    plt.plot(x, A_result.best_fit, 'r-', label=f'Composite Fit', zorder=2)
-    plt.title(f'MCD initial fit')
-    plt.xlabel('X')
-    plt.ylabel('Y')
-    plt.legend()
-    plt.show()
+    dplt.plot_A_terms(x, z, A_result, remaining_indices)
 
     ## Remove the least impactful A-term fits. If buggy, may have to use different variable names.
 
     # Identify the least impactful Gaussians and remove them
     impactful_gaussian_derivatives = remove_least_impactful_gaussian_derivatives_by_fit(x, z, A_result,
+
                                                                                         len(remaining_indices),
                                                                                         rss_threshold_percent=THRESHOLD_PERCENT)
     print(f"Least impactful Gaussians are: {impactful_gaussian_derivatives}")
@@ -709,53 +625,3 @@ def iterate_and_fit_gaussians(x, y, z, mcd_df, max_basis_gaussians=MAX_BASIS_GAU
     print(df)
 
     return df
-
-    # Optionally, display the table with improved formatting
-    # df.style.format({
-    #    'Dipole Center (D)': '{:.2f}',
-    #    'A-Term Center (A)': '{:.2f}',
-    #    'Amplitude (D)': '{:.4f}',
-    #    'Amplitude (A)': '{:.4f}',
-    #    'A/D Ratio': '{:.4f}'
-    # })
-
-    # print(df)
-
-
-# Main Execution (Reading from CSV)
-def main():
-    file_path = fh.select_processed_file()
-    file_directory = os.path.dirname(file_path)
-    base_name = os.path.basename(file_path).replace("__processed.csv", "")
-    save_file_path = os.path.join(file_directory, f"{base_name}_A_term.csv")
-
-    mcd_df = pd.read_csv(file_path)
-
-    # Prepare the dataframe
-    mcd_df['wavenumber'] = 1e7 / mcd_df['wavelength']
-    mcd_df['scaled_absorption'] = mcd_df['intensity'] / (mcd_df['wavenumber'] * 1.315 * 326.6)
-    mcd_df['scaled_MCD'] = mcd_df['R_signed'] / (mcd_df['wavenumber'] * 1.315 * 152.5)  # Is this even orientational averaging? I get reasonable values if I dont do the orientational averaging for MCD.
-
-    plt.plot(mcd_df['wavenumber'], mcd_df['intensity'])
-    plt.show()
-    plt.plot(mcd_df['wavenumber'], mcd_df['R_signed'])  # To make sure things are scaling.
-    plt.show()
-
-    # Extract x and y values
-    wavenumbers = mcd_df['wavenumber'].values
-    scaled_absorption = mcd_df['scaled_absorption'].values
-    scaled_mcd = mcd_df['scaled_MCD'].values
-
-
-    #remove data that corresponds with NAN
-    mask = ~np.isnan(wavenumbers) & ~np.isnan(scaled_absorption) & ~np.isnan(scaled_mcd)
-    x = wavenumbers[mask]
-    y = scaled_absorption[mask]
-    z = scaled_mcd[mask]
-
-    # Perform Gaussian fitting on the data from the CSV
-    df = iterate_and_fit_gaussians(x, y, z, mcd_df)
-
-    print(f'Saving output to: {save_file_path}')
-    # Save the DataFrame (df) to the new CSV file
-    df.to_csv(save_file_path, index=False)  # 'index=False' avoids saving the row numbers as an extra column
