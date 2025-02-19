@@ -30,5 +30,9 @@
     "PtTrans_abs.csv": {
         "concentration_mol_L": 0.0000117,
         "pathlength_cm": 0.2
+    },
+    "thinfilm-14d_abs.csv": {
+        "concentration_mol_L": 2.3,
+        "pathlength_cm": 0.000005
     }
 }

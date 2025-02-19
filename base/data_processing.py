@@ -97,7 +97,7 @@ def convert_abs_to_extinction(
         concentration = abs_data[filename]["concentration_mol_L"]
         pathlength = abs_data[filename]["pathlength_cm"]
         for column in columns:
-            df[f"{column}_extinction"] = df[column] / (concentration * pathlength)
+            df[f"{column}_extinction"] = df[column] / (concentration * pathlength) # concentration * pathlength * field
             #print("dataframe extinction", df[f"{column}_extinction"])
         logging.info(f"Converted {columns} to extinction for {filename}")
     else:
