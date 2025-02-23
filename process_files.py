@@ -2,9 +2,10 @@ import os
 
 from tkinter import messagebox
 
-from MCD_process.base.data_processing import process_files
+from base.data_processing import process_files
 from base.utils import file_handler as fh
 from base.utils import logger
+import  rw_db as db
 
 #init root logger
 logger.init_root_logger("mcd_process_log.txt")
@@ -18,9 +19,10 @@ def main():
         # basically i iassume that abs_data.json, config.json and this script are all in the same directory.
         #i think I also had some issue where if you were running this on mac vs windows it didnt build the directory nmame right. (Case sensitvie?)
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        abs_data_path = os.path.join(script_dir, "abs_data.json")
         config_path = os.path.join(script_dir, "config.json")
-        abs_data = fh.load_json(abs_data_path)
+        #load from database
+        abs_data_name = input("Enter LIMS ID: ")
+        abs_data = db.get_fields(abs_data_name)
         config = fh.load_json(config_path)
         file_dict = fh.select_files_processing()
         if file_dict:

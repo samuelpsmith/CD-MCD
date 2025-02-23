@@ -84,24 +84,21 @@ def kk_arbspace(omega: np.ndarray, imchi: np.ndarray, alpha: int) -> np.ndarray:
         rechi[0, j] = 2 / np.pi * (a[0, j] + b[0, j]) * omega[0, j] ** (-2 * alpha)
 
     return rechi.flatten()
-def convert_abs_to_extinction(
-    df: pd.DataFrame, filename: str, abs_data: dict, columns: list
-) -> pd.DataFrame:
+def convert_abs_to_extinction(df: pd.DataFrame, abs_data: dict, columns: list) -> pd.DataFrame:
     print(
-        f"starting convert to extinction. filename {filename}, abs_data {abs_data}, columns {columns}"
+        f"starting convert to extinction. abs_data {abs_data}, columns {columns}"
     )
-    print(f"Filename: {filename}")
     print(f"Keys in abs_data: {abs_data.keys()}")
-
-    if filename in abs_data:
-        concentration = abs_data[filename]["concentration_mol_L"]
-        pathlength = abs_data[filename]["pathlength_cm"]
-        for column in columns:
-            df[f"{column}_extinction"] = df[column] / (concentration * pathlength)
+    concentration = abs_data["concentration_mol_L"]
+    pathlength = abs_data["pathlength_cm"]
+    #might need to change
+    field = abs_data["field_B"]
+    for column in columns:
+        df[f"{column}_extinction"] = df[column] / (concentration * pathlength * field)
             #print("dataframe extinction", df[f"{column}_extinction"])
-        logging.info(f"Converted {columns} to extinction for {filename}")
+        logging.info(f"Converted {columns} to extinction for {abs_data["name"]}")
     else:
-        logging.warning(f"No absorbance data found for {filename}, conversion skipped")
+        logging.warning(f"No absorbance data found for {abs_data["name"]}, conversion skipped")
     return df
 
 
@@ -268,7 +265,6 @@ def process_files(file_dict: defaultdict, config: dict, abs_data: dict):
                         print("convert to extinction is true (abs)")
                         abs_df_copy = convert_abs_to_extinction(
                             abs_df_copy,
-                            os.path.basename(abs_file),
                             abs_data,
                             ["intensity"],
                         )
@@ -289,7 +285,6 @@ def process_files(file_dict: defaultdict, config: dict, abs_data: dict):
                         print("convert to extinction is true (MCD_process)")
                         mcd_df = convert_abs_to_extinction(
                             mcd_df,
-                            os.path.basename(abs_file),  # whats goin on here?
                             abs_data,
                             ["R_signed", "std_dev"],
                         )
