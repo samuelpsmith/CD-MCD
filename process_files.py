@@ -5,6 +5,7 @@ from tkinter import messagebox
 from base.data_processing import process_files
 from base.utils import file_handler as fh
 from base.utils import logger
+from base.constants import LOAD_FROM_DB
 import rw_db as db
 
 #init root logger
@@ -12,6 +13,15 @@ logger.init_root_logger("mcd_process_log.txt")
 #get logger with module name
 logging = logger.get_logger(__name__)
 
+def create_dict(id, name, conc, path_length, field_strength):
+    dic = {
+        "id" : id,
+        "name" : name,
+        "concentration_mol_L" : conc,
+        "pathlength_cm" : path_length,
+        "field_B" : field_strength
+    }
+    return dic
 
 def main():
     try:
@@ -20,9 +30,19 @@ def main():
         #i think I also had some issue where if you were running this on mac vs windows it didnt build the directory nmame right. (Case sensitvie?)
         script_dir = os.path.dirname(os.path.abspath(__file__))
         config_path = os.path.join(script_dir, "config.json")
-        #load from database
-        abs_data_name = input("Enter LIMS ID: ")
-        abs_data = db.get_fields(abs_data_name)
+        abs_data = None
+
+        if not LOAD_FROM_DB:
+            id = input("Enter ID: ")
+            name = input("Enter name: ")
+            conc = input("Enter concentration MOL/L: ")
+            path_length = input("Enter pathlength mm")
+            field_B = input("Enter field strength B")
+            abs_data = create_dict(id,name,float(conc),float(path_length),float(field_B))
+        else:
+            #Load from db
+            abs_data_name = input("Enter LIMS ID: ")
+            abs_data = db.get_fields(abs_data_name)
         config = fh.load_json(config_path)
         file_dict = fh.select_files_processing()
         if file_dict:

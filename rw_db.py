@@ -70,5 +70,15 @@ def enter_samples():
         cont = input("Would you like to enter more (y/n)? ")
         if cont == "n":
             break
+def delete_field(lims_ID):
+    connection = None
+    try:
+        connection = db.connect("processing_db.db")
+        print("Connected to db for delete")
+        cur = connection.cursor()
+        cur.execute("DELETE FROM SAMPLES WHERE id = ?", (lims_ID,))
+    finally:
+        print("closed connection to db for delete")
+        connection.close()
 if __name__ == "__main__":
     enter_samples()
