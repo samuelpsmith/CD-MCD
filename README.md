@@ -30,11 +30,12 @@ This script is designed to process Magnetic Circular Dichroism (MCD) and absorpt
   - matplotlib
   - scipy
   - tkinter
+  - lmfit
 
 You can install the required packages using the following command:
 
 ```bash
-pip install pandas numpy matplotlib scipy tk
+pip install pandas numpy matplotlib scipy tk lmfit
 ```
 
 If you are on windows, you may need to use the following command to install pip after installing python from the windows store:
@@ -44,10 +45,10 @@ python -m ensurepip --upgrade
 
 ### Configuration Files
 
-The script uses two configuration files:
+The script uses one configuration file and an optional database:
 
 1. `config.json`: General configuration for the script.
-2. `abs_data.json`: Contains concentration and pathlength data for the absorption files.
+2. `processing_db.db` Database for storing sample parameters such as magnetic field strength and concentration.
 
 #### Example `config.json`
 
@@ -65,40 +66,34 @@ The script uses two configuration files:
 }
 ```
 
-#### Example `abs_data.json`
-
-```json
-{
-  "same_prefix_as_mcd1_abs.csv": {
-    "concentration_mol_L": 0.01,
-    "pathlength_cm": 1
-  },
-  "same_prefix_as_mcd2_abs.csv": {
-    "concentration_mol_L": 0.005,
-    "pathlength_cm": 1
-  }
-}
-```
-
 ### How to Use
 
 1. **Place your CSV files in a directory**: Ensure your CSV files are named appropriately to include `pos`, `neg`, and `abs` to indicate positive, negative, and absorption data respectively.
 
-2. **Prepare the Configuration Files**:
-   - Create `config.json` and `abs_data.json` files in the same directory as the script or specify the correct paths.
+2. **Prepare the Configuration Files and Constants**:
+   - Create `config.json` file in the same directory as the script or specify the correct paths.
+   - Ensure constants in `base/constants.py` are set to expectation which includes the flag `LOAD_FROM_DB` for use of a local database.
 
-3. **Run the Script**:
+3. **Optional Database**:
+   - Run `rw_db.py` to create and populate line by line a local database to store parameters for samples with a LIMS ID as the key.
+
+4. **Run the Script**:
    - Execute the script by running the following command in your terminal or command prompt:
      ```bash
-     python mcd_processing.py
+     python data_processing.py
      ```
+   - Enter in LIMS ID or prompted values
 
-4. **Select the Files**:
+5. **Select the Files**:
    - A file dialog will appear prompting you to select the CSV files. Select the files you want to process.
+   - The program expects at least `pos`, `neg`, and `abs` csv files. `sticks` file is optional.
 
-5. **Processed Data**:
+6. **Processed Data**:
    - The processed data will be saved in a new directory called `processed_data` within the directory where the original files are located.
    - The script will generate plots for the MCD, Absorption, and MORD data. If configured, it will also plot derivatives and sticks for transition predictions.
+   
+7. **Fit Data**:
+   - Run `fit_data.py` on processed CSV file to fit to the data.
 
 ### Function Overview
 
@@ -143,9 +138,10 @@ Main function to load configuration, select files, and process the data.
 
 ### Troubleshooting
 
+- **Ensure LIMS ID entered is valid** Case matters.
 - **No Files Selected**: Ensure you select the correct CSV files when prompted.
 - **File Naming**: Ensure the files are named correctly to include `pos`, `neg`, and `abs`.
-- **Configuration Errors**: Check the `config.json` and `abs_data.json` files for correct formatting and valid paths.
+- **Configuration Errors**: Check the `config.json` file for correct formatting and valid paths.
 
 ### License
 
