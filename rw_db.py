@@ -66,7 +66,7 @@ def enter_samples():
         conc = input("Enter concentration: ")
         pl = input("Enter pathlength: ")
         field = input("Enter field strength: ")
-        populate_table(id,name,conc,pl,field)
+        populate_table(id,name,float(conc),float(pl),float(field))
         cont = input("Would you like to enter more (y/n)? ")
         if cont == "n":
             break

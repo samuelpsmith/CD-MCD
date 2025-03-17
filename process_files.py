@@ -5,7 +5,7 @@ from tkinter import messagebox
 from base.data_processing import process_files
 from base.utils import file_handler as fh
 from base.utils import logger
-import  rw_db as db
+import rw_db as db
 
 #init root logger
 logger.init_root_logger("mcd_process_log.txt")
