@@ -7,5 +7,6 @@
     "spline_points": 500,
     "convert_to_extinction": true,
     "plot_sticks": true,
-    "plot_error_bars": true
+    "plot_error_bars": true,
+     "load_from_db": false
 }

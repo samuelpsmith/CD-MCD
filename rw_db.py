@@ -15,6 +15,8 @@ def get_fields(lims_id):
         res = cur.execute("SELECT * FROM SAMPLES WHERE id = ?", (lims_id,))
         print("collected fields")
         fields = res.fetchone()
+    except Exception as e:
+        print("Failed to find lims ID or connect to database: exception -> "+str(e))
     finally:
         connection.close()
         print("connection closed")

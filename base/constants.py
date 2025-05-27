@@ -1,8 +1,6 @@
 # Test data generation.
 import numpy as np
 
-LOAD_FROM_DB = False #Flag to load from local database created by rw_db.py
-
 NUM_GAUSSIANS = 3  # Number of Gaussians to generate
 NOISE_LEVEL = 0.01  # Noise level to add to the generated Gaussian curve
 NUM_X_VALUES = 500  # Number of points in the x-axis array

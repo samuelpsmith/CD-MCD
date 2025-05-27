@@ -5,7 +5,6 @@ from tkinter import messagebox
 from base.data_processing import process_files
 from base.utils import file_handler as fh
 from base.utils import logger
-from base.constants import LOAD_FROM_DB
 import rw_db as db
 
 #init root logger
@@ -30,7 +29,9 @@ def main():
         #i think I also had some issue where if you were running this on mac vs windows it didnt build the directory nmame right. (Case sensitvie?)
         script_dir = os.path.dirname(os.path.abspath(__file__))
         config_path = os.path.join(script_dir, "config.json")
+        config = fh.load_json(config_path)
         abs_data = None
+        LOAD_FROM_DB = config.get("load_from_db")
 
         if not LOAD_FROM_DB:
             id = input("Enter ID: ")
@@ -43,7 +44,6 @@ def main():
             #Load from db
             abs_data_name = input("Enter LIMS ID: ")
             abs_data = db.get_fields(abs_data_name)
-        config = fh.load_json(config_path)
         file_dict = fh.select_files_processing()
         if file_dict:
             process_files(file_dict, config, abs_data)

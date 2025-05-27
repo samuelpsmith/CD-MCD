@@ -250,6 +250,20 @@ def process_files(file_dict: defaultdict, config: dict, abs_data: dict):
                 fh.read_csv_file(sticks_file, column_names_sticks) if sticks_file else None
             )
 
+            #remove anything not a float
+
+            #check regex
+            mask_abs_df = check_all_floats_rowwise(abs_df)
+            mask_positive_df = check_all_floats_rowwise(positive_df)
+            mask_negative_df = check_all_floats_rowwise(negative_df)
+
+            mask_all = mask_abs_df & mask_positive_df & mask_negative_df
+
+            abs_df = abs_df[mask_all]
+            positive_df = positive_df[mask_all]
+            negative_df = negative_df[mask_all]
+
+
             if (
                     positive_df is not None
                     and negative_df is not None
@@ -329,6 +343,20 @@ def process_files(file_dict: defaultdict, config: dict, abs_data: dict):
 
                     # fitting goes here. fitted_params = fit_peaks_seperately_old(abs_df_copy, mcd_df, column='intensity_extinction', height_percent=1, lorentz_frac=0.5)
 
+                    #filter non floats again
+                        # remove anything not a float
+
+                        mask_mcd_df = check_all_floats_rowwise(mcd_df)
+                        mask_abs_df_copy = check_all_floats_rowwise(abs_df_copy)
+
+                        mask_all = mask_mcd_df & mask_abs_df_copy
+
+                        mcd_df = mcd_df[mask_all]
+                        abs_df_copy = abs_df_copy[mask_all]
+                        mord_df = mord_df[mask_all]
+
+                        print(mcd_df)
+
                     # change to new plot data function
                     dplt.plot_data_old(
                         base_name,
@@ -370,3 +398,5 @@ def process_files(file_dict: defaultdict, config: dict, abs_data: dict):
                 "File Pairing Error",
                 f"Missing {', '.join(missing_types)} file(s) for base name {base_name}",
             )
+def check_all_floats_rowwise(df):
+    return df.applymap(lambda x: isinstance(x, (int, float)) and np.isfinite(x)).all(axis=1)
