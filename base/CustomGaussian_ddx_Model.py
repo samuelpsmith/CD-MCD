@@ -1,13 +1,17 @@
+#
+#A custom model of the Gaussian 1st derivative lineshape copying the default lmfit GaussianModel behavior.
+#
+
+#Uses a numerically stable gaussian derivative. Takes arguments in terms of sigma.
+#In the case that non-constant values are found (i.e. not Tiny), then should be normalized to 1.
+
 import numpy as np
 from lmfit import Model
-
 from .constants import MAX_SIGMA
 from .gaussians import stable_gaussian_derivative_sigma
 
 
 class CustomGaussian_ddx_Model(Model):
-    """A custom model of the Gaussian 1st derivative lineshape copying the default lmfit GaussianModel behavior."""
-
     fwhm_factor = 2 * np.sqrt(2 * np.log(2))
     height_factor = 1 / np.sqrt(2 * np.pi)
 

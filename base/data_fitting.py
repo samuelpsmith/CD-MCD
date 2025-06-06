@@ -1,3 +1,6 @@
+#
+# Module to hold all methods related to data fitting
+#
 from lmfit.models import GaussianModel
 import lmfit
 from scipy.signal import find_peaks, savgol_filter
@@ -7,13 +10,12 @@ from .CustomGaussianModel import CustomGaussianModel
 from .CustomGaussian_ddx_Model import CustomGaussian_ddx_Model
 from .constants import *
 
-
-# Define all the constants
-
-
-
-# Define a function to group close centers, using tolerance as a percentage of the x range
-# Define a function to group close centers, using tolerance as a percentage of the x range
+#Params: Dict dipole_params - parameters for the dipole
+#        Dict aterm_params - parameters for the aterm
+#        Dict x_values - x axis values
+#        int tolerance_percentage - Tolerance as percentage of x range
+#Retruns: List of dicts for grouped params
+#Does: Groups close centers
 def group_centers(dipole_params, aterm_params, x_values, tolerance_percentage=5):
     """Groups transitions together. Right now, also converts a terms to be positive or negative according to convention. """
     grouped_params = []
@@ -44,12 +46,14 @@ def group_centers(dipole_params, aterm_params, x_values, tolerance_percentage=5)
                 })
 
     return grouped_params
-
-
-# Function to generate a single Gaussian
-
-
-# Function to fit Gaussians using lmfit with positive constraints for amplitude and sigma
+#Params: numpy.ndarray x - x values
+#        numpy.ndarray y - y values
+#        int num_basis_gaussians - number of basis gaussians to fit
+#        list amplitudes - List of the amplitudes of the gaussians
+#        list centers - List of the centers of the gaussians
+#        list sigmas - List of the std deviations of the gaussians
+#Returns: pair of lmfit result and model
+#Does: Function to fit gaussians using lmfit with positive constraints for amplitude and sigma
 def fit_gaussians(x, y, num_basis_gaussians, amplitudes, centers, sigmas):
     "the new fitting function using custom classes."
     model = None
@@ -67,11 +71,17 @@ def fit_gaussians(x, y, num_basis_gaussians, amplitudes, centers, sigmas):
                    max=centers[i] + (centers[i] * PERCENTAGE_RANGE / 100), vary=VARY_CENTERS)  # Set bounds for center
         params.add(f'g{i}_amplitude', value=amplitudes[i],min=0.0)  # min=amplitudes[i] - (amplitudes[i] * PERCENTAGE_RANGE), max=amplitudes[i] + (amplitudes[i] * PERCENTAGE_RANGE))           # Amplitude must be positive
         params.add(f'g{i}_sigma', value=sigmas[i], max=MAX_SIGMA)  # min=0, max=sigmas[i] + (sigmas[i] * PERCENTAGE_RANGE))            # Sigma must be positive, example upper bound
-    result = model.fit(y, params, x=x)
+    result = model.fit(y, params, x=x, nan_policy='omit')
     return result, model
 
-
-# Function to fit Gaussians using lmfit with positive constraints for amplitude and sigma
+#Params: numpy.ndarray x - x values
+#        numpy.ndarray y - y values
+#        int num_basis_gaussians - number of gaussians to fit
+#        list amplitudes - List of the amplitudes of the gaussians
+#        list centers - List of the centers of the gaussians
+#        list sigmas - List of the std deviations of the gaussians
+#Does: Function to fit gaussian derivatives using lmfit with positive constraints for amplitude and sigma
+#Returns: Pair (lmfit.result, lmfit.model)- Pair of lmfit result and model
 def fit_gaussian_derivatives(x, y, num_basis_gaussians, amplitudes, centers, sigmas):
     "fitting gaussian derivatives using the new fitting function w/ custom classes."
     model = None
@@ -97,44 +107,23 @@ def fit_gaussian_derivatives(x, y, num_basis_gaussians, amplitudes, centers, sig
             i])  # min=0, max=sigmas[i] + (sigmas[i] * PERCENTAGE_RANGE))            # Sigma must be positive, example upper bound
 
 
-    result = model.fit(y, params, x=x)
+    result = model.fit(y, params, x=x, nan_policy='omit')
     return result, model
-
-
-# Function to fit Gaussians using lmfit with positive constraints for amplitude and sigma
-def fit_gaussians_old(x, y, num_basis_gaussians, amplitudes, centers, sigmas):
-    "the old fitting function before moving to the custom classes."
-    model = None
-    params = lmfit.Parameters()
-
-    for i in range(num_basis_gaussians):
-        g = GaussianModel(prefix=f'g{i}_')
-        if model is None:
-            model = g
-        else:
-            model = model + g
-        params.update(g.make_params())
-        # Initialize parameters with bounds using `add()` method
-        params.add(f'g{i}_center', value=centers[
-            i])  # , min=centers[i] - (centers[i] * PERCENTAGE_RANGE / 100), max=centers[i] + (centers[i] * PERCENTAGE_RANGE / 100), vary=True)  # Set bounds for center
-        params.add(f'g{i}_amplitude', value=amplitudes[i],
-                   min=0)  # min=amplitudes[i] - (amplitudes[i] * PERCENTAGE_RANGE), max=amplitudes[i] + (amplitudes[i] * PERCENTAGE_RANGE))           # Amplitude must be positive
-        params.add(f'g{i}_sigma', value=sigmas[
-            i])  # min=0, max=sigmas[i] + (sigmas[i] * PERCENTAGE_RANGE))            # Sigma must be positive, example upper bound
-    result = model.fit(y, params, x=x)
-    return result, model
-
-
-# Function to generate multiple Gaussians with added noise
-
-#Function for finding some width at some ratio of max from peak - similar to FWHM
+#Param: float ratio - percentage of gaussian peak height to use for a full width measurement to sigma
+#Returns: The full width any max factor
+#Does:Function for finding some width at some ratio of max from peak - similar to FWHM
 def get_anymax_factor(ratio):
     if (ratio >= 1): #return FWHM if ratio is invalid
         print("full width any max has invalid ratio")
         return SMALL_FWHM_FACTOR
     else:
         return np.sqrt(8*np.log(1/ratio))
-# Function to estimate sigma
+#Params: numpy.ndarray x - x values
+#        numpy.ndarray y - y values
+#        int peak_index - center of peak for the gaussian
+#        float ratio - full width any max ratio eg. 1/2 1/3
+#Returns: float - An estimation for the std deviation of the gaussian
+#Does: Function to estimate sigmas of gaussians corresponding to the peak_index
 def estimate_sigma(x, y, peak_index, ratio):
     some_max = y[peak_index] * ratio
     left_candidates = np.where(y[:peak_index] < some_max)[0]
@@ -152,39 +141,49 @@ def estimate_sigma(x, y, peak_index, ratio):
     sigma = abs(fwam / get_anymax_factor(ratio)) # Convert to sigma
     #cap sigma
     return min(sigma, MAX_SIGMA)
-#estimates sigma for 1/10 max, 2/10 max, 3/10 max... up to 9/10 max
+#Params: np array x - x values
+#        np array y - y values
+#        int peak_index - center of peak for the gaussian
+#Returns: float - an average of different full width any max estimations
+#Does: Calculates an average of different full width any max estimations with a range defined in constants.py
 def estimate_average_sigma(x, y, peak_index):
     total = 0
     count = 0
     for i in range(ESTIMATE_SIGMA_ITERATIONS_START, ESTIMATE_SIGMA_ITERATIONS_END - 1):
         total += estimate_sigma(x,y,peak_index, i/ESTIMATE_SIGMA_ITERATIONS_END)
         count += 1
-    return (total/count)
-# Function to generate initial guesses for Gaussian parameters
+    return total/count
+
+#Params: numpy.ndarray y - y values
+#        int window_length - savgol filter window length
+#        int polyorder - savgol filter poly order
+#Returns: numpy.ndarray - if SMOOTHING is true in constants it returns a smoothed y. otherwise returns y
+#Does: If smoothing is True in constants.py it will smooth y. Otherwise, it returns y.
+def savgol_filter_bool(y, window_length=WINDOW_LENGTH, polyorder=POLYORDER):
+    if SMOOTHING:
+        return savgol_filter(y, window_length=WINDOW_LENGTH, polyorder=POLYORDER)
+    else:
+        return y
+
+#Params: numpy.ndarray x - x values
+#        numpy.ndarray y - y values
+#        int num_gaussians- number of gaussians to make a guess for
+#return tuple (numpy.ndarray, numpy.ndarray, numpy.ndarray) - returns (peak centers, peak amplitudes, peak std deviations)
+#Does: Function to generate initial guesses for Gaussian parameters
 def generate_initial_guesses(x, y, num_gaussians):
     # Smooth the noisy data
-    y_smoothed = savgol_filter(y, window_length=WINDOW_LENGTH, polyorder=POLYORDER)
-    #print(y_smoothed)
+    y_smoothed = savgol_filter_bool(y, window_length=WINDOW_LENGTH, polyorder=POLYORDER)
     # Calculate the numerical derivatives
     d_y_smoothed = np.gradient(y_smoothed,x)
     # Calculate the 2nd numerical derivatives
     dd_y = np.gradient(d_y_smoothed, x)
     dd_y_smoothed = np.gradient(d_y_smoothed, x)
-    dd_y_smoothed = savgol_filter(dd_y_smoothed, window_length=WINDOW_LENGTH, polyorder=POLYORDER)
+    dd_y_smoothed = savgol_filter_bool(dd_y_smoothed, window_length=WINDOW_LENGTH, polyorder=POLYORDER)
     # Find peaks in the negative second derivative (to locate the centers of Gaussians)
     prominence = PROMINENCE_PERECENT * np.nanmax(dd_y)
     height = HEIGHT_THRESHOLD * np.nanmax(dd_y)
-    #print(np.nanmax(dd_y))
-
-    #interpolate so find peaks behaves right
-    #A = np.interp(np.arange(len(dd_y_smoothed)),np.arange(len(dd_y_smoothed))[np.isnan(dd_y_smoothed) == False],dd_y_smoothed[np.isnan(dd_y_smoothed) == False])
-    #print(dd_y_smoothed)
-    #print(A)
-
-
 
     dd_y_peaks_all, _ = find_peaks(-dd_y_smoothed, height=height, distance=DISTANCE, prominence=prominence)
-    #print(dd_y_smoothed)
     dd_y_peaks = filter_peaks_deltax(x, dd_y_peaks_all)
     peak_centers = x[dd_y_peaks]
     peak_amplitudes = y_smoothed[dd_y_peaks]
@@ -206,48 +205,12 @@ def generate_initial_guesses(x, y, num_gaussians):
     dplt.plot_true_combined_and_smoothed(x,y,y_smoothed,dd_y_smoothed, dd_y_peaks, peak_centers, peak_amplitudes, peak_sigmas)
 
     return peak_amplitudes, peak_centers, peak_sigmas
-
-
-def generate_initial_guesses_A(x, y, num_gaussians):
-    # Smooth the noisy data
-    y_smoothed = savgol_filter(y, window_length=WINDOW_LENGTH, polyorder=POLYORDER)
-
-    # Calculate the numerical derivatives
-    d_y = np.gradient(y_smoothed, x)
-    d_y_smoothed = savgol_filter(d_y, window_length=WINDOW_LENGTH, polyorder=POLYORDER)
-
-    # Find peaks in the negative second derivative (to locate the centers of Gaussians)
-    prominence = PROMINENCE_PERECENT * max(d_y)
-
-    d_y_peaks_all, _ = find_peaks(-d_y_smoothed, height=HEIGHT_THRESHOLD, distance=DISTANCE, prominence=prominence)
-    d_y_peaks = filter_peaks_deltax(x, d_y_peaks_all) #filter peaks by max peak delta x
-
-    peak_centers = x[d_y_peaks]
-    peak_amplitudes = y_smoothed[d_y_peaks]  # this wont work for a terms
-    # this would work if my gaussian is normalized to unit height.
-    # going to need to get that special gaussian going. brb
-    # might need to modify this to unit area and integrate.
-    peak_sigmas = [estimate_average_sigma(x, y_smoothed, peak) for peak in d_y_peaks]
-    # estimating sigma from raw data is troublesome. Consider trying to do so from second derivative or solve analytically using peak height. Of course, the derivative would need to be normalzied.
-
-    # If identified more peaks than needed, sort by amplitude and keep the strongest ones
-    if len(peak_centers) > num_gaussians:
-        sorted_indices = np.argsort(peak_amplitudes)[-num_gaussians:]
-        peak_centers = peak_centers[sorted_indices]
-        peak_amplitudes = peak_amplitudes[sorted_indices]
-        peak_sigmas = np.array(peak_sigmas)[sorted_indices]
-
-    print(f'Initial Guess Peak Centers: {peak_centers}')
-    print(f'Initial Guess Peak Sigmas: {peak_sigmas}')
-    print(f'Intial Guess Peak Amplitudes: {peak_amplitudes}')
-
-    # Plot the true combined Gaussian curve and smoothed curve
-    dplt.plot_true_combined_and_smoothed(x,y,y_smoothed,d_y_smoothed, d_y_peaks, peak_centers, peak_amplitudes, peak_sigmas)
-
-    return peak_amplitudes, peak_centers, peak_sigmas
-
-
-# Function to remove least impactful Gaussians by contribution to RSS
+#Params: numpy.ndarray x - x values
+#        numpy.ndarray y - y values
+#        int num_basis - number of gaussians/gaussian derivatives to cut off at
+#        float rss_threshold_percent- residual sum of squares threshold
+#Returns: list (tuple (float, float | int)) - list of least impactful gaussian indices and rss contributions
+#Does: Function to remove least impactful gaussians derivatives by contribution to RSS and cap at num_basis
 def remove_least_impactful_gaussian_derivatives_by_fit(x, y, result, num_basis, rss_threshold_percent=5):
     rss_increases = []
     least_impactful_gaussians = []
@@ -278,7 +241,7 @@ def remove_least_impactful_gaussian_derivatives_by_fit(x, y, result, num_basis, 
                                    vary=False)
 
         if reduced_model:
-            reduced_result = reduced_model.fit(y, reduced_params, x=x)
+            reduced_result = reduced_model.fit(y, reduced_params, x=x, nan_policy='omit')
             reduced_rss = np.sum((y - reduced_result.best_fit) ** 2)
             rss_increase = reduced_rss - original_rss
             rss_increases.append(rss_increase)
@@ -308,7 +271,12 @@ def remove_least_impactful_gaussian_derivatives_by_fit(x, y, result, num_basis, 
 
     return least_impactful_gaussians
 
-
+#Params: numpy.ndarray x - x values
+#        numpy.ndarray y - y values
+#        lmfit.result result - result to remove gaussians from
+#        float rss_threshold_percent- residual sum of squares threshold
+#Returns list (tuple (float, float | int)) - returns a list of tuples representing the gaussian index and the rss increase
+#Does: removes the least impactful gaussians from the result and returns a list of the result with them removed
 def remove_least_impactful_gaussians_by_fit(x, y, result, num_basis, rss_threshold_percent=5):
     rss_increases = []
     least_impactful_gaussians = []
@@ -339,7 +307,7 @@ def remove_least_impactful_gaussians_by_fit(x, y, result, num_basis, rss_thresho
                                    vary=False, max=MAX_SIGMA)
 
         if reduced_model:
-            reduced_result = reduced_model.fit(y, reduced_params, x=x)
+            reduced_result = reduced_model.fit(y, reduced_params, x=x, nan_policy='omit')
             reduced_rss = np.sum((y - reduced_result.best_fit) ** 2)
             rss_increase = reduced_rss - original_rss
             rss_increases.append(rss_increase)
@@ -368,7 +336,10 @@ def remove_least_impactful_gaussians_by_fit(x, y, result, num_basis, rss_thresho
     print(f'Least impactful gaussians: {least_impactful_gaussians}')
 
     return least_impactful_gaussians
-
+#Params: x - x values
+#        numpy.ndarray peaks - array of peak centers
+#Returns: numpy.ndarray - numpy.ndarray of peaks after filter
+#Does: Filters out peaks that have a separation of less MIN_PEAK_X_DISTANCE in constants.py
 def filter_peaks_deltax(x, peaks):
     peak_list = list(peaks)
     center_prev = x[peaks[0]] #last center because of ordering
@@ -384,7 +355,13 @@ def filter_peaks_deltax(x, peaks):
         prev_peak = peak
     return np.array(peak_list)
 
-
+#Params: numpy.ndarray x - x values
+#        numpy.ndarray y - y values
+#        numpy.ndarray z - z values (mcd_scaled)
+#        int max_basis_gaussians - max number of gaussians to fit
+#        num_guesses - number of guesses to attempt to fit
+#Returns: pandas.DataFrame representing the fit
+#Does: Iterates and fits gaussians
 def iterate_and_fit_gaussians(x, y, z, mcd_df, max_basis_gaussians=MAX_BASIS_GAUSSIANS, num_guesses=NUM_GUESSES):
     #remove NAN to avoid conflics with lmfit
 
@@ -395,8 +372,11 @@ def iterate_and_fit_gaussians(x, y, z, mcd_df, max_basis_gaussians=MAX_BASIS_GAU
 
     amplitudes, centers, sigmas = generate_initial_guesses(x, y, max_basis_gaussians)
     previous_bic = None  # Make sure that this initilizes to None so that we dont have memory issues.
-    lowest_delta_bic = float('inf')  # Initialize to a large value
-    lowest_delta_bic_idx = -1  # Index for N with lowest delta BIC - here we are going to lowest bic then going back one step?
+
+    #UNUSED
+    #lowest_delta_bic = float('inf')  # Initialize to a large value
+    #lowest_delta_bic_idx = -1  # Index for N with lowest delta BIC - here we are going to lowest bic then going back one step?
+
     lowest_bic = float('inf')
     lowest_bic_idx = -1  # Index for N with lowest delta BIC - not exactly sure here?
 
@@ -405,7 +385,6 @@ def iterate_and_fit_gaussians(x, y, z, mcd_df, max_basis_gaussians=MAX_BASIS_GAU
     # but cant fit more curves than we have guesses.
     fits = []
     #Center length is zero
-    #print(len(centers))
     for num_basis in range(1, len(centers) + 1):
         bic_list = []
         fits = []
@@ -420,10 +399,8 @@ def iterate_and_fit_gaussians(x, y, z, mcd_df, max_basis_gaussians=MAX_BASIS_GAU
             print(f'result.bic:{bic}')
             bic_list.append(bic)
             fits.append(result)
-            #print(len(fits)+1)
 
-        avg_bic = np.mean(
-            bic_list)  # because I assume I am taking multiple guesses - but I have been limiting number of guesses to 1 so the average of 1 number is itself.
+        avg_bic = np.mean(bic_list)  # because I assume I am taking multiple guesses - but I have been limiting number of guesses to 1 so the average of 1 number is itself.
         avg_bic_values.append(avg_bic)
         # Calculate delta BIC
         if previous_bic is not None:
@@ -498,7 +475,7 @@ def iterate_and_fit_gaussians(x, y, z, mcd_df, max_basis_gaussians=MAX_BASIS_GAU
                            max=sigma_value + (sigma_value * PERCENTAGE_RANGE / 100))
 
     # Perform the fit again after removing the least impactful Gaussians
-    reduced_result = reduced_model.fit(y, reduced_params, x=x)
+    reduced_result = reduced_model.fit(y, reduced_params, x=x, nan_policy='omit')
 
     dplt.plot_reduced_result(x, y, num_basis, reduced_result, impactful_gaussian_indices)
 
@@ -546,16 +523,13 @@ def iterate_and_fit_gaussians(x, y, z, mcd_df, max_basis_gaussians=MAX_BASIS_GAU
         #                   min=sigmas[i] - (sigmas[i] * PERCENTAGE_RANGE / 100),
         #                   max=sigmas[i] + (sigmas[i] * PERCENTAGE_RANGE / 100))
 
-    A_result = A_model.fit(z, A_params, x=x)
+    A_result = A_model.fit(z, A_params, x=x, nan_policy='omit')
     dplt.plot_A_terms(x, z, A_result, remaining_indices)
 
     ## Remove the least impactful A-term fits. If buggy, may have to use different variable names.
 
     # Identify the least impactful Gaussians and remove them
-    impactful_gaussian_derivatives = remove_least_impactful_gaussian_derivatives_by_fit(x, z, A_result,
-
-                                                                                        len(remaining_indices),
-                                                                                        rss_threshold_percent=THRESHOLD_PERCENT)
+    impactful_gaussian_derivatives = remove_least_impactful_gaussian_derivatives_by_fit(x, z, A_result, len(remaining_indices),rss_threshold_percent=THRESHOLD_PERCENT)
     print(f"Least impactful Gaussians are: {impactful_gaussian_derivatives}")
 
     # Extract indices of least impactful Gaussians
@@ -600,7 +574,7 @@ def iterate_and_fit_gaussians(x, y, z, mcd_df, max_basis_gaussians=MAX_BASIS_GAU
                                       max=derivative_sigma_value + (derivative_sigma_value * PERCENTAGE_RANGE / 100))
 
     # Perform the fit again after removing the least impactful Gaussians
-    reduced_A_result = reduced_derivative_model.fit(z, reduced_derivative_params, x=x)
+    reduced_A_result = reduced_derivative_model.fit(z, reduced_derivative_params, x=x, nan_policy='omit')
     #plot
     dplt.plot_xz_after_gaussian_removal(x,z,reduced_A_result, remaining_derivative_indices, impactful_gaussian_derivative_indices)
 

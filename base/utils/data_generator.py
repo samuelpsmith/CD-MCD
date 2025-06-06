@@ -1,3 +1,7 @@
+#
+# Unused currently
+# Module for data generation
+#
 import numpy as np
 def generate_gaussians(x, gaussian_funct, num_gaussians, noise_level, seed, min_distance):
     y = np.zeros_like(x)

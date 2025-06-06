@@ -1,7 +1,5 @@
 import os
-
 from tkinter import messagebox
-
 from base.data_processing import process_files
 from base.utils import file_handler as fh
 from base.utils import logger
@@ -12,6 +10,13 @@ logger.init_root_logger("mcd_process_log.txt")
 #get logger with module name
 logging = logger.get_logger(__name__)
 
+#Params: String id - LIMS id for sample
+#        String name - name of the sample
+#        float conc - concentration of the sample
+#        float path_length - path_length of the sample
+#        float field_strength - field_strength of the sample
+#Returns: dict - returns dictionary containing data
+#Does: Creates a dictionary at the end of user input
 def create_dict(id, name, conc, path_length, field_strength):
     dic = {
         "id" : id,

@@ -5,6 +5,9 @@ import base.utils.logger as logger
 #maybe will log database connections
 logging = logger.get_logger(__name__)
 
+#Parmas: string lims_id - LIMS id of the sample to get the fields for
+#Return: dict (id, name, concentration_mol_L, pathlength_cm, field_B)- dictionary of the field
+#Does: Gets the fields of a sample in the database
 def get_fields(lims_id):
     connection = None
     fields = None
@@ -21,6 +24,10 @@ def get_fields(lims_id):
         connection.close()
         print("connection closed")
         return create_dict(fields)
+
+#Params: None
+#Returns: Void
+#Does: Creates a local database to store LIMS sample info
 def create_db():
     if os.path.exists("processing_db.db"):
         print("Database already created")
@@ -36,6 +43,13 @@ def create_db():
     finally:
         connection.close()
         print("connection closed")
+#Params: string lims_ID - LIMS id
+#        string name - name of sample
+#        float conc - concentration of sample
+#        float pl - path length of sample
+#        float field - field strength applied to sample
+#Returns: Void
+#Does: Adds a sample to the local database
 def populate_table(lims_ID, name, conc, pl, field):
     connection = None
     try:
@@ -52,6 +66,9 @@ def populate_table(lims_ID, name, conc, pl, field):
     finally:
         connection.close()
         print("connection closed")
+#Params: tuple query - tuple containing sample fields
+#Retrun: dict - Dictionary of the sample fields
+#Does: Creates a dictionary of the sample fields out of a sql lite query of the local sample database
 def create_dict(query):
     dic = {
         "id" : query[0],
@@ -61,6 +78,9 @@ def create_dict(query):
         "field_B" : query[4]
     }
     return dic
+#Params: None
+#Returns: Void
+#Does: Calls for user input to enter a sample
 def enter_samples():
     while True:
         id = input("Enter LIMS ID: ")
@@ -72,6 +92,10 @@ def enter_samples():
         cont = input("Would you like to enter more (y/n)? ")
         if cont == "n":
             break
+
+#Params: string lims_ID - LIMS id od the sample to delete
+#Returns: Void
+#Does: Deletes a sample from the local database
 def delete_field(lims_ID):
     connection = None
     try:

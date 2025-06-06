@@ -1,3 +1,7 @@
+#
+#Module holding constants used throughout the program
+#
+
 # Test data generation.
 import numpy as np
 
@@ -10,6 +14,7 @@ SEED = 479806  # seed for reproducibility.
 MIN_DISTANCE = 5  # simulate the 'bandwidth' of the fake instrument.
 
 #Smoothing
+SMOOTHING = True
 WINDOW_LENGTH = 5  # Window length for Savitzky-Golay smoothing (datapoints?) (relate to bandwidth?)
 POLYORDER = 4  # Polynomial order for Savitzky-Golay smoothing
 

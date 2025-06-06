@@ -1,13 +1,19 @@
+#
+#A custom Gaussian model replicating the default lmfit GaussianModel.
+#
+
+#
+#1-dimensional Gaussian function.
+#
+
+
 import numpy as np
 from lmfit import Model
-
 from .constants import MAX_SIGMA
 from .gaussians import custom_gaussian
 
 
 class CustomGaussianModel_default(Model):
-    """A custom Gaussian model replicating the default lmfit GaussianModel."""
-
     fwhm_factor = 2 * np.sqrt(2 * np.log(2))
     height_factor = 1 / np.sqrt(2 * np.pi)
 

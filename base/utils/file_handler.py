@@ -1,3 +1,6 @@
+#
+#Methods used for handling files
+#
 from collections import defaultdict
 from . import logger
 import json
@@ -11,7 +14,8 @@ import numpy as np
 
 #get logger
 logging = logger.get_logger(__name__)
-
+#Params: String file_path - filepath of the json settings to load
+#Returns: Dict with json info
 def load_json(file_path: str) -> dict:
     try:
         with open(file_path, "r") as file:
@@ -27,7 +31,8 @@ def load_json(file_path: str) -> dict:
     except Exception as e:
         logging.error(f"Unexpected error loading JSON file: {e}")
         raise
-#returns filepath from file explorer selection
+#Params: None
+#Return: String - Filepath that was selected in file explorer
 def select_processed_file():
     root = tk.Tk()
     root.withdraw()
@@ -35,6 +40,8 @@ def select_processed_file():
         title="Select processed file"
     )
     return file_path
+#Params: None
+#Returns: dict - Dict of paths from files selected for processing
 def select_files_processing() -> defaultdict:
     root = tk.Tk()
     root.withdraw()
@@ -70,13 +77,17 @@ def select_files_processing() -> defaultdict:
 
     return file_dict
 
+#Params: String base_path - path to folder to save the processed data
+#Returns: String - Path for processed files
 def create_output_directory(base_path: str) -> str:
     output_dir = os.path.join(base_path, "processed_data")
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     return output_dir
 
-
+#Params: String filename - filename of csv file that holds data for processing
+#        list column_names - Names of columns for the data to be put into pandas dataframe
+#Returns: Pandas DataFrame - DataFrame holding the csv files data
 def read_csv_file(filename: str, column_names: list = None) -> pd.DataFrame:
     try:
         if column_names:
@@ -96,6 +107,13 @@ def read_csv_file(filename: str, column_names: list = None) -> pd.DataFrame:
         logging.error(f"Unexpected error: {e}")
     return None
 
+#Params: String output_file_path - String for the output file path
+#        Pandas DataFrame mcd_df - Dataframe for the mcd data
+#        Pandas DataFrame abs_df_copy - DataFrame for the abs data
+#        Pandas DataFrame mord_df - DataFrame for the mord data
+#        Pandas DataFrame sticks_df - DataFrame for the optional sticks data
+#Retruns: Void
+#Does: Saves the processed data into a ouput file
 def save_data(output_file_path, mcd_df, abs_df_copy, mord_df, sticks_df=None):
     # Merge MCD and Absorption data
     # considering renaming to MCD_process, abs, mord. But doing so would break some of the modularity of the code.

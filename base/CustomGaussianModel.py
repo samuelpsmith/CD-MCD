@@ -1,13 +1,17 @@
+#
+#A custom Gaussian model replicating the default lmfit GaussianModel.
+#
+
+#Uses a numerically stable gaussian. Takes arguments in terms of sigma.
+#In the case that non-constant values are found (i.e. not Tiny), then should be normalized to 1.
+
 import numpy as np
 from lmfit import Model
-
 from .constants import MAX_SIGMA
 from .gaussians import stable_gaussian_sigma
 
 
 class CustomGaussianModel(Model):
-    """A custom Gaussian model replicating the default lmfit GaussianModel."""
-
     fwhm_factor = 2 * np.sqrt(2 * np.log(2))
     height_factor = 1 / np.sqrt(2 * np.pi)
 

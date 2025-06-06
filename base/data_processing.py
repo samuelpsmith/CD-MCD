@@ -1,12 +1,11 @@
 #
 #
-#cleans and interpolates data
+#cleans and processes data
 #
 #
 import os
 from collections import defaultdict
 from tkinter import messagebox
-
 from . import data_plotting as dplt
 from .utils import logger as logger, file_handler as fh
 import numpy as np
@@ -16,8 +15,11 @@ from scipy.signal import find_peaks
 
 logging = logger.get_logger(__name__)
 
-def calculate_differences(
-    positive_df: pd.DataFrame, negative_df: pd.DataFrame) -> tuple:
+#Params: pandas.DataFrame positive_df - Dataframe storing data under positive magnetic field
+#        pandas.DataFrame negative_df - Dataframe storing data under negative(reversed) magnetic field
+#Returns: tuple (float, float, float, float, float)
+#Does: Corrects baseline
+def calculate_differences(positive_df: pd.DataFrame, negative_df: pd.DataFrame) -> tuple:
     # This is a way to account for a baseline that is introduce by optical abberations of the setup, incl. linear dichroisms(?)
     # we do this parametrically ( by X and by Y)
     x_diff = (positive_df["x_pos"] - negative_df["x_neg"]) / 2
@@ -35,10 +37,11 @@ def calculate_differences(
     R_signed = R * np.sign(y_diff) # why do we multiply by the sign of y and not x? idk it I think its bc it looked better. figure it out.
     return x_diff, y_diff, x_stdev, y_stdev, R_signed, R_stdev
 
-
-def interpolate_data(
-    wavelength: pd.Series, R_signed: pd.Series, spline_points: int
-) -> tuple:
+#Params: Pandas series wavelength - series of wavelengths from the data
+#        Pandas series R_signed - series for R_signed vectors of CD elipse
+#        int spline_points - number of points to interpolate for spline
+#Returns: Pair (Pandas Series, Pandas Series) - returns pair of (wavelength series, R_signed series)
+def interpolate_data(wavelength: pd.Series, R_signed: pd.Series, spline_points: int) -> tuple:
     try:
         spline = make_interp_spline(wavelength, R_signed)
         X_ = np.linspace(wavelength.min(), wavelength.max(), spline_points)
@@ -47,8 +50,13 @@ def interpolate_data(
     except ValueError as e:
         logging.error(f"Interpolation error: {e}")
         return wavelength, R_signed
+
+#Params: numpy.ndarray omega - omega for Kramers Kronig
+#        numpy.ndarray imchi - imchi for Kramers Kronig
+#        int alpha - alpha for Kramers Kronig
+#Returns: numpy.ndarray - Transformed result
+#Does: +kramers kronig function in arbitrary (frequency?) space
 def kk_arbspace(omega: np.ndarray, imchi: np.ndarray, alpha: int) -> np.ndarray:
-    # kramers kronig function in arbitrary (frequency?) space
     # we ought to probably look this thing up and make sure we have it implemented correctly.
     omega = np.array(omega)
     imchi = np.array(imchi)
@@ -84,6 +92,11 @@ def kk_arbspace(omega: np.ndarray, imchi: np.ndarray, alpha: int) -> np.ndarray:
         rechi[0, j] = 2 / np.pi * (a[0, j] + b[0, j]) * omega[0, j] ** (-2 * alpha)
 
     return rechi.flatten()
+#Params: pandas.DataFrame df - Dataframe of raw absorption data
+#        dict abs_data - dictionary of the absorption data parameters
+#        list columns -  list of column names for conversion
+#Return: pandas.DataFrame - Converted absorption to extinction data
+#Does: Converts absorption to extinction
 def convert_abs_to_extinction(df: pd.DataFrame, abs_data: dict, columns: list) -> pd.DataFrame:
     print(
         f"starting convert to extinction. abs_data {abs_data}, columns {columns}"
@@ -95,16 +108,17 @@ def convert_abs_to_extinction(df: pd.DataFrame, abs_data: dict, columns: list) -
     field = abs_data["field_B"]
     for column in columns:
         df[f"{column}_extinction"] = df[column] / (concentration * pathlength * field)
-            #print("dataframe extinction", df[f"{column}_extinction"])
         logging.info(f"Converted {columns} to extinction for {abs_data["name"]}")
     else:
         logging.warning(f"No absorbance data found for {abs_data["name"]}, conversion skipped")
     return df
 
-
-def scale_sticks(
-    sticks_df: pd.DataFrame, max_absorbance: float, scale_factor: float = 1
-) -> pd.DataFrame:
+#Params: pandas.DataFrame sticks_df - dataframe for sticks data
+#        float max_absorbance - max absorbance
+#        float scale_factor - factor to scale sticks by
+#Returns: pandas.DataFrame - sticks DataFrame
+#Does: Scales sticks data
+def scale_sticks(sticks_df: pd.DataFrame, max_absorbance: float, scale_factor: float = 1) -> pd.DataFrame:
     sticks_df = sticks_df.copy()
     sticks_df["scaled_strength"] = (
         sticks_df["strength"]
@@ -113,21 +127,12 @@ def scale_sticks(
         * scale_factor
     )
     return sticks_df
-
-
+#Params: pandas.DataFrame df - The DataFrame containing the absorption data.
+#        String column - The column to pick peaks from. Defaults to 'intensity_extinction'.
+#        float height_percent - The minimum height of a peak as a percentage of the maximum value.
+#Does: Picks the peaks of the absorption data.
+#Returns: tuple (numpy.ndarray, numpy.ndarray, numpy.ndarray) - Arrays of peak indices, peak wavelengths, peak wavenumbers (if available), and peak intensities.
 def pick_peaks(df, column="intensity_extinction", height_percent=1):
-    """
-    Picks the peaks of the absorption data.
-
-    Args:
-        df (pd.DataFrame): The DataFrame containing the absorption data.
-        column (str, optional): The column to pick peaks from. Defaults to 'intensity_extinction'.
-        height_percent (float, optional): The minimum height of a peak as a percentage of the maximum value.
-
-    Returns:
-        tuple: Arrays of peak indices, peak wavelengths, peak wavenumbers (if available), and peak intensities.
-    """
-
     print("Starting pick_peaks")
     height = df[column].max() * (height_percent / 100)
     peaks, _ = find_peaks(df[column], height=height, prominence=0.25 * height)
@@ -151,62 +156,17 @@ def pick_peaks(df, column="intensity_extinction", height_percent=1):
     # Return peaks, peak_wavelengths, peak_wavenumbers, peak_intensities
     return peaks, peak_wavelengths, peak_wavenumbers, peak_intensities
 
+#Params: pandas.DataFrame df - dataframe to convert to bool for input processing
+#Returns: pandas.DataFrame - Return bool dataframe where each row is a bool representing if the row in df had a non number entry
+#Does: Checks if every entry in a row is a number and returns a dataframe representing that
+def check_all_floats_rowwise(df):
+    return df.applymap(lambda x: isinstance(x, (int, float)) and np.isfinite(x)).all(axis=1)
 
-def find_local_maxima_within_range(
-    x_data, y_data, center, gamma
-):  # edited to use gamma
-    lower_bound = max(
-        center - ((3 * gamma) / 2), x_data.min()
-    )  # is this in wavenumber or in indices?
-    upper_bound = min(center + ((3 * gamma) / 2), x_data.max())
-
-    fitting_range = (x_data >= lower_bound) & (x_data <= upper_bound)
-    print(
-        f"fitting_range: {fitting_range}, lower_bound: {lower_bound}, upper_bound: {upper_bound}"
-    )
-
-    if np.any(fitting_range):
-        # Get the subset of x_data and y_data within the fitting range
-        subset_x = x_data[fitting_range]
-        subset_y = y_data[fitting_range]
-
-        # Find the local maximum within this subset
-        local_max_index = np.argmax(subset_y)
-        local_max_x = subset_x.iloc[local_max_index]
-        local_max_y = subset_y.iloc[local_max_index]
-        return local_max_x, local_max_y
-
-    print(
-        "find_local_maxima_within_range unable to find maxima, no values in range. return center, 0"
-    )
-    return center, 0
-
-
-def adjust_nearest_mean_points(df, means, column="normalized_intensity"):
-    """
-    Adjust the points nearest to the means in the DataFrame by averaging the nearest points.
-
-    Args:
-        df (pd.DataFrame): The DataFrame containing the data.
-        means (list): The list of mean values (wavenumbers) to find the nearest points to.
-        column (str): The column to adjust. Defaults to 'normalized_intensity'.
-    """
-    for mean in means:
-        nearest_idx = (df["wavenumber"] - mean).abs().idxmin()
-        if nearest_idx + 1 < len(df) and nearest_idx - 1 >= 0:
-            df.at[nearest_idx, column] = (
-                df.at[nearest_idx - 1, column] + df.at[nearest_idx + 1, column]
-            ) / 2
-    return df
-
-
-def index_to_xdata(xdata, indices):
-    """Interpolate the values from signal.peak_widths to xdata."""
-    ind = np.arange(len(xdata))
-    f = interp1d(ind, xdata)
-    return f(indices)
-
-
+#Params: defaultdict file_dict - dictionary for file paths
+#        dict config - dictionary for config parameters
+#        dict abs_data - Dictionary for absorption data
+#Retruns: Void
+#Does: Main method for processing files
 def process_files(file_dict: defaultdict, config: dict, abs_data: dict):
     # here I am explicitly defining column names because the data comes unlabelled.
     column_names_pos = [
@@ -250,9 +210,8 @@ def process_files(file_dict: defaultdict, config: dict, abs_data: dict):
                 fh.read_csv_file(sticks_file, column_names_sticks) if sticks_file else None
             )
 
-            #remove anything not a float
+            #remove any rows that contain bad data between all as mask
 
-            #check regex
             mask_abs_df = check_all_floats_rowwise(abs_df)
             mask_positive_df = check_all_floats_rowwise(positive_df)
             mask_negative_df = check_all_floats_rowwise(negative_df)
@@ -344,18 +303,16 @@ def process_files(file_dict: defaultdict, config: dict, abs_data: dict):
                     # fitting goes here. fitted_params = fit_peaks_seperately_old(abs_df_copy, mcd_df, column='intensity_extinction', height_percent=1, lorentz_frac=0.5)
 
                     #filter non floats again
-                        # remove anything not a float
+                    #remove any rows that contain bad data between all as mask
 
-                        mask_mcd_df = check_all_floats_rowwise(mcd_df)
-                        mask_abs_df_copy = check_all_floats_rowwise(abs_df_copy)
+                    mask_mcd_df = check_all_floats_rowwise(mcd_df)
+                    mask_abs_df_copy = check_all_floats_rowwise(abs_df_copy)
 
-                        mask_all = mask_mcd_df & mask_abs_df_copy
+                    mask_all = mask_mcd_df & mask_abs_df_copy
 
-                        mcd_df = mcd_df[mask_all]
-                        abs_df_copy = abs_df_copy[mask_all]
-                        mord_df = mord_df[mask_all]
-
-                        print(mcd_df)
+                    mcd_df = mcd_df[mask_all]
+                    abs_df_copy = abs_df_copy[mask_all]
+                    mord_df = mord_df[mask_all]
 
                     # change to new plot data function
                     dplt.plot_data_old(
@@ -398,5 +355,3 @@ def process_files(file_dict: defaultdict, config: dict, abs_data: dict):
                 "File Pairing Error",
                 f"Missing {', '.join(missing_types)} file(s) for base name {base_name}",
             )
-def check_all_floats_rowwise(df):
-    return df.applymap(lambda x: isinstance(x, (int, float)) and np.isfinite(x)).all(axis=1)

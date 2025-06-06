@@ -1,7 +1,4 @@
-import numpy
 import pandas as pd
-from matplotlib import pyplot as plt
-
 from . import data_processing as dp
 import numpy as np
 from .utils import logger as logger
@@ -10,6 +7,15 @@ import matplotlib.pyplot as plt
 
 logging = logger.get_logger(__name__)
 
+#Params: string base_name - name on the plot
+#        pandas.DataFrame mcd_df - dataframe for the mcd data
+#        pandas.DataFrame abs_df - dataframe for the absorption data
+#        pandas.DataFrame mord_df - dataframe for the mord data
+#        dict config - dictionary representing config
+#        string output_file_path: File path for saving the plot
+#        pandas.DataFrame sticks_df: dataframe for the stick data
+#Returns: Void
+#Does: Plots the processed data
 def plot_data_old(
         base_name: str,
         mcd_df: pd.DataFrame,
@@ -18,20 +24,6 @@ def plot_data_old(
         config: dict,
         output_file_path: str,
         sticks_df: pd.DataFrame = None,) -> None:
-    """Plot the MCD, absorption, and MORD data.
-
-    Args:
-        base_name (str): Base name for the plots and titles.
-        mcd_df (pd.DataFrame): DataFrame containing MCD data.
-        abs_df (pd.DataFrame): DataFrame containing absorption data.
-        mord_df (pd.DataFrame): DataFrame containing MORD data.
-        config (dict): Configuration dictionary with plotting options.
-        output_file_path (str): Path to save the output plot.
-        sticks_df (pd.DataFrame, optional): DataFrame containing stick spectra. Defaults to None.
-
-    Returns:
-        None
-    """
     logging.info(f"Starting plot generation for {base_name}")
     # Ensure 'wavelength' column is numeric
     abs_df["wavelength"] = pd.to_numeric(abs_df["wavelength"], errors="coerce")
@@ -311,6 +303,14 @@ def plot_data_old(
     plt.show()
     plt.close(fig)
     logging.info("Plot generation completed.")
+
+#Parmas: numpy.ndarray x - x axis values
+#        numpy.ndarray y - y values
+#        list (lmfit.result) - list of all lmfit fits for data
+#        int num_basis - number of basis gaussians for the plot
+#        int lowest_bic_idk - idx of the end point for the lowest bic for the fits
+#Returns: Void
+#Does: Plots bic with gaussian iterations
 def plot_gaussian_iterations(x, y, all_fits, num_basis, lowest_bic_idx):
     for fit_idx, fit in enumerate(all_fits):
         plt.figure(figsize=(8, 4))
@@ -335,6 +335,17 @@ def plot_gaussian_iterations(x, y, all_fits, num_basis, lowest_bic_idx):
         plt.ylabel('Y')
         plt.legend()
         plt.show()
+
+#Params: numpy.ndarray x -  x values
+#        numpy.ndarray y - y values
+#        numpy.ndarray y_smoothed - y values smoothed with 4th degree savgol filter
+#        numpy.ndarray dd_y_smoothed - derivative of y values smoothed with 4th degree savgol filter
+#        numpy.ndarray dd_y_peaks - peak centers indices of the derivative
+#        numpy.ndarray peak_centers - array of the peak centers indices for y
+#        numpy.ndarray peak_amplitudes - array of amplitudes for the peaks
+#        numpy.ndarray peak_sigmas - array of std deviations for the peaks
+#Returns: Void
+#Does: plots the smoothed y curve and smoothed derivative of y curve with visual peak information and the initial guesses on a separate plot.
 def plot_true_combined_and_smoothed(x, y, y_smoothed, dd_y_smoothed, dd_y_peaks,  peak_centers, peak_amplitudes, peak_sigmas):
     # Plot the true combined Gaussian curve and smoothed curve
     plt.figure(figsize=(10, 6))
@@ -361,7 +372,10 @@ def plot_true_combined_and_smoothed(x, y, y_smoothed, dd_y_smoothed, dd_y_peaks,
     plt.grid(True)
     plt.show()
 
-
+#Params: numpy.ndarray x - x values
+#        numpy.ndarray y - y values
+#Returns: Void
+#Does: Plots the true combined gaussian curve and its derivative.
 def plot_true_curve_and_derivative(x, y):
     derivative = np.gradient(y, x)
     plt.figure(figsize=(8, 4))
@@ -372,6 +386,13 @@ def plot_true_curve_and_derivative(x, y):
     plt.ylabel('Y')
     plt.legend()
     plt.show()
+#Params: numpy.ndarray x - x values
+#        numpy.ndarray y - y values
+#        lmfit.result reduced_A_result - the result of the fir after the least impactful gaussian removals
+#        numpy.ndarray remaining_derivative_indices - list of the remaining gaussian derivative indices
+#        numpy.ndarray impactful_gaussian_derivative_indices - list of the gaussian derivative indices to skip in plotting
+#Returns: void
+#Does: Plots mcd fit without the lest impactful gaussian.
 def plot_xz_after_gaussian_removal(x,z,reduced_A_result,remaining_derivative_indices,impactful_gaussian_derivative_indices):
     # Plot the fit after the least impactful Gaussians are removed
     plt.figure(figsize=(8, 4))
@@ -391,6 +412,13 @@ def plot_xz_after_gaussian_removal(x,z,reduced_A_result,remaining_derivative_ind
     plt.ylabel('Y')
     plt.legend()
     plt.show()
+
+#Params: numpy.ndarray x - x values
+#        numpy.ndarray z - z values(mcd)
+#        lmfit.result A_result - the fit for the A faraday terms
+#        numpy.ndarray remaining_indices - the remaining A term indices after processing
+#Returns: Void
+#Does: Plots the A terms
 def plot_A_terms(x,z, A_result, remaining_indices):
     plt.figure(figsize=(8, 4))
     plt.plot(x, z, 'b', label='Data with noise', zorder=1)
@@ -409,6 +437,14 @@ def plot_A_terms(x,z, A_result, remaining_indices):
     plt.ylabel('Y')
     plt.legend()
     plt.show()
+
+#Params: numpy.ndarray x - x values
+#        numpy.ndarray y - y values
+#        int num_basis - number of basis gaussians
+#        lmfit.result reduced_result - The result of the fit
+#        numpy.ndarray impactful_gaussian_indices - array of the indices of the least impactful gaussians
+#Returns: Void
+#Does: plots the reduced fit
 def plot_reduced_result(x, y, num_basis, reduced_result, impactful_gaussian_indices):
     # Plot the fit after the least impactful Gaussians are removed
     plt.figure(figsize=(8, 4))
@@ -433,6 +469,10 @@ def plot_reduced_result(x, y, num_basis, reduced_result, impactful_gaussian_indi
     plt.legend()
     plt.show()
 
+#Params: numpy.ndarray avg_bic_values - Array of the average bic between fits
+#        numpy.ndarray avg_delta_bic_values - Array of the delta bic between fits
+#Returns: Void
+#Does: plots average and delta BIC between fits
 def plot_bic(avg_bic_values, avg_delta_bic_values):
     # Plot average BIC values
     plt.figure(figsize=(8, 4))
@@ -450,6 +490,10 @@ def plot_bic(avg_bic_values, avg_delta_bic_values):
         plt.xlabel('Number of basis Gaussians')
         plt.ylabel('Delta BIC')
         plt.show()
+
+#Params: pandas.DataFrame mcd_df : dataframe for the mcd data
+#Returns: Void
+#Does: Plots the raw mcd data
 def plot_raw_df(mcd_df):
     plt.plot(mcd_df['wavenumber'], mcd_df['intensity'])
     plt.show()
