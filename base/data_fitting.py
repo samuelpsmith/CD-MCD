@@ -164,6 +164,8 @@ def savgol_filter_bool(y, window_length=WINDOW_LENGTH, polyorder=POLYORDER):
         return savgol_filter(y, window_length=WINDOW_LENGTH, polyorder=POLYORDER)
     else:
         return y
+def filter_by_max_peak_height(peaks, peak_info):
+    return peaks[peak_info["peak_heights"] > MIN_PEAK_HEIGHT]
 
 #Params: numpy.ndarray x - x values
 #        numpy.ndarray y - y values
@@ -183,8 +185,12 @@ def generate_initial_guesses(x, y, num_gaussians):
     prominence = PROMINENCE_PERECENT * np.nanmax(dd_y)
     height = HEIGHT_THRESHOLD * np.nanmax(dd_y)
 
-    dd_y_peaks_all, _ = find_peaks(-dd_y_smoothed, height=height, distance=DISTANCE, prominence=prominence)
+    dd_y_peaks_all, peak_info = find_peaks(-dd_y_smoothed, height=height, distance=DISTANCE, prominence=prominence)
+
+    #filter peaks
+    dd_y_peaks_all = filter_by_max_peak_height(dd_y_peaks_all, peak_info)
     dd_y_peaks = filter_peaks_deltax(x, dd_y_peaks_all)
+
     peak_centers = x[dd_y_peaks]
     peak_amplitudes = y_smoothed[dd_y_peaks]
     # this would work if my gaussian is normalized to unit height. lets try writing this so that we are normalized to unit area. brb
