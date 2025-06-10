@@ -1,9 +1,10 @@
 #
 # Module to hold all methods related to data fitting
 #
+import scipy.signal
 from lmfit.models import GaussianModel
 import lmfit
-from scipy.signal import find_peaks, savgol_filter
+from scipy.signal import find_peaks, savgol_filter, peak_prominences
 import pandas as pd
 from . import data_plotting as dplt
 from .CustomGaussianModel import CustomGaussianModel
@@ -164,8 +165,10 @@ def savgol_filter_bool(y, window_length=WINDOW_LENGTH, polyorder=POLYORDER):
         return savgol_filter(y, window_length=WINDOW_LENGTH, polyorder=POLYORDER)
     else:
         return y
-def filter_by_max_peak_height(peaks, peak_info):
-    return peaks[peak_info["peak_heights"] > MIN_PEAK_HEIGHT]
+def filter_by_max_peak_height(y, peaks, peak_info):
+    peaks_abs = abs(peak_info["peak_heights"]) > MIN_ABSOLUTE_PEAK_HEIGHT
+    peaks_rel = abs(peak_prominences(y, peaks)[0]) > -MIN_PROMINENCE
+    return peaks[peaks_abs & peaks_rel]
 
 #Params: numpy.ndarray x - x values
 #        numpy.ndarray y - y values
@@ -188,7 +191,7 @@ def generate_initial_guesses(x, y, num_gaussians):
     dd_y_peaks_all, peak_info = find_peaks(-dd_y_smoothed, height=height, distance=DISTANCE, prominence=prominence)
 
     #filter peaks
-    dd_y_peaks_all = filter_by_max_peak_height(dd_y_peaks_all, peak_info)
+    dd_y_peaks_all = filter_by_max_peak_height(-dd_y_smoothed, dd_y_peaks_all, peak_info)
     dd_y_peaks = filter_peaks_deltax(x, dd_y_peaks_all)
 
     peak_centers = x[dd_y_peaks]
