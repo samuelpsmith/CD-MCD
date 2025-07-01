@@ -17,6 +17,10 @@ def main():
 
     mcd_df = pd.read_csv(file_path)
 
+    #quick fix for old data
+    if 'intensity_extinction' in mcd_df.columns:
+        mcd_df.rename(columns={'intensity_extinction': 'intensity'}, inplace=True)
+
     # Prepare the dataframe
     mcd_df['wavenumber'] = 1e7 / mcd_df['wavelength']
     mcd_df['scaled_absorption'] = mcd_df['intensity'] / (mcd_df['wavenumber'] * 1.315 * 326.6)

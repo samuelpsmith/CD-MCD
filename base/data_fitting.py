@@ -165,6 +165,11 @@ def savgol_filter_bool(y, window_length=WINDOW_LENGTH, polyorder=POLYORDER):
         return savgol_filter(y, window_length=WINDOW_LENGTH, polyorder=POLYORDER)
     else:
         return y
+#Params: numpy.ndarray y - y values
+#        numpy.ndarray peaks - peak indices
+#        dict peak_info - properties result from scip findPeaks
+#Returns: Masked peak array
+#Does: Filters peaks by relative and absolute height defined in constants.py
 def filter_by_max_peak_height(y, peaks, peak_info):
     peaks_abs = abs(peak_info["peak_heights"]) > MIN_ABSOLUTE_PEAK_HEIGHT
     peaks_rel = abs(peak_prominences(y, peaks)[0]) > -MIN_PROMINENCE
