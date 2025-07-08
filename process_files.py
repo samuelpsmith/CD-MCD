@@ -42,7 +42,7 @@ def main():
             id = input("Enter ID: ")
             name = input("Enter name: ")
             conc = input("Enter concentration MOL/L: ")
-            path_length = input("Enter pathlength mm: ")
+            path_length = input("Enter pathlength cm: ")
             field_B = input("Enter field strength B: ")
             abs_data = create_dict(id,name,float(conc),float(path_length),float(field_B))
         else:
