@@ -29,6 +29,7 @@ NUM_GUESSES = 1  # Number of guesses for each basis fitting - created this with 
 VARY_CENTERS = False
 DELTA_BIC_THRESHOLD = 0  # Threshold for detecting when BIC levels out - depends on the number of points. Need to normalize somehow. Set to zero to effectively bypass.
 THRESHOLD_PERCENT = 0.1  # Threshold under which a basis curve is not contributing to the fit, and therefore is removed. This should probably be maximally 100/N, N is the number of (reasonable) basis curves. In experience, the ones that don't contribute tend to be very small say less than 1%
+RSS_THRESHOLD_PERCENT = 5
 PERCENTAGE_RANGE = 1  # The percentage by which the initial parameters will be allowed to relax on re-fitting after removing poor curves.
 PERCENT_RANGE_X = 1
 TOLERANCE_X = 2  # how close centers can be as a percent of the overall x values and be considered the same.

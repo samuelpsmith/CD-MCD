@@ -370,7 +370,7 @@ def filter_peaks_deltax(x, peaks):
     return np.array(peak_list)
 
 #TODO: documentation
-def fit_gaussians_to_signal_reduced_result(x, z, reduced_result, CustomGaussianModel, VARY_CENTERS=True, PERCENTAGE_RANGE=10, THRESHOLD_PERCENT=1.0):
+def fit_gaussians_to_signal_reduced_result(x, z, reduced_result, CustomGaussianModel, VARY_CENTERS=True, PERCENTAGE_RANGE=10, THRESHOLD_PERCENT=RSS_THRESHOLD_PERCENT, PLOT = True):
     B_model = None
     B_params = lmfit.Parameters()
 
@@ -404,6 +404,7 @@ def fit_gaussians_to_signal_reduced_result(x, z, reduced_result, CustomGaussianM
     reduced_B_params = lmfit.Parameters()
     remaining_B_indices = [i for i in remaining_indices if i not in impactful_gaussian_B_indices]
 
+    print(f"rem ind {remaining_B_indices}")
     for i in remaining_B_indices:
         g = CustomGaussianModel(prefix=f'g{i}_')
         if reduced_B_model is None:
@@ -426,7 +427,7 @@ def fit_gaussians_to_signal_reduced_result(x, z, reduced_result, CustomGaussianM
                              max=B_sigma_value + (B_sigma_value * PERCENTAGE_RANGE / 100))
 
     reduced_B_result = reduced_B_model.fit(z, reduced_B_params, x=x)
-    dplt.plot_fit_with_residuals(x, z, reduced_B_result.best_fit, title="Reduced B-Term Fit with Residuals")
+    if PLOT: dplt.plot_fit_with_residuals(x, z, reduced_B_result.best_fit, title="Reduced B-Term Fit with Residuals")
 
     return reduced_B_result
 #TODO: redo docs
@@ -541,14 +542,16 @@ def iterate_and_fit_gaussians(x, y, z, mcd_df, max_basis_gaussians=MAX_BASIS_GAU
 
     ##############################################################################################################################
 
-    remaining_indices = [i for i in range(num_basis) if i not in impactful_gaussian_indices]
     z_minus_A = z - reduced_A_result.best_fit
 
-    z_pos = z_minus_A[z > 0]
-    x_pos = x[z > 0]
+    mask_pos = z_minus_A > 0
+    mask_neg = z_minus_A < 0
 
-    z_neg = z_minus_A[z < 0]
-    x_neg = x[z < 0]
+    x_pos = x[mask_pos]
+    z_pos = z_minus_A[mask_pos]
+
+    x_neg = x[mask_neg]
+    z_neg = z_minus_A[mask_neg]
 
     reduced_B_result_pos = fit_gaussians_to_signal_reduced_result(
         x_pos, z_pos, reduced_result, CustomGaussianModel,
@@ -564,9 +567,12 @@ def iterate_and_fit_gaussians(x, y, z, mcd_df, max_basis_gaussians=MAX_BASIS_GAU
         THRESHOLD_PERCENT=THRESHOLD_PERCENT
     )
 
+    # Allocate combined fit array
     combined_B_fit = np.zeros_like(z)
-    combined_B_fit[z > 0] = reduced_B_result_pos.best_fit
-    combined_B_fit[z < 0] = reduced_B_result_neg.best_fit
+
+    # Use the **same masks** for assignment
+    combined_B_fit[mask_pos] = reduced_B_result_pos.best_fit
+    combined_B_fit[mask_neg] = reduced_B_result_neg.best_fit
 
     # Add A-terms back in to reconstruct full modeled signal
     final_fit = reduced_A_result.best_fit + combined_B_fit
