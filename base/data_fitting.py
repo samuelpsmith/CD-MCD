@@ -369,65 +369,100 @@ def filter_peaks_deltax(x, peaks):
         prev_peak = peak
     return np.array(peak_list)
 
-#Params: numpy.ndarray x - x values
-#        numpy.ndarray y - y values
-#        numpy.ndarray z - z values (mcd_scaled)
-#        int max_basis_gaussians - max number of gaussians to fit
-#        num_guesses - number of guesses to attempt to fit
-#Returns: pandas.DataFrame representing the fit
-#Does: Iterates and fits gaussians
-def iterate_and_fit_gaussians(x, y, z, mcd_df, max_basis_gaussians=MAX_BASIS_GAUSSIANS, num_guesses=NUM_GUESSES):
-    #remove NAN to avoid conflics with lmfit
+#TODO: documentation
+def fit_gaussians_to_signal_reduced_result(x, z, reduced_result, CustomGaussianModel, VARY_CENTERS=True, PERCENTAGE_RANGE=10, THRESHOLD_PERCENT=1.0):
+    B_model = None
+    B_params = lmfit.Parameters()
 
-    # we passsed the gaussians to this function so that we can visualize them, but they arent required for fitting obvs.
+    remaining_indices = [i for i in range(len(reduced_result.params) // 3) if f'g{i}_center' in reduced_result.params]
+
+    for i in remaining_indices:
+        g = CustomGaussianModel(prefix=f'g{i}_')
+        if B_model is None:
+            B_model = g
+        else:
+            B_model = B_model + g
+        B_params.update(g.make_params())
+
+        center_value = reduced_result.params[f'g{i}_center'].value
+        amplitude_value = reduced_result.params[f'g{i}_amplitude'].value
+        sigma_value = reduced_result.params[f'g{i}_sigma'].value
+
+        B_params.add(f'g{i}_center', value=center_value, vary=VARY_CENTERS)
+        B_params.add(f'g{i}_amplitude', value=amplitude_value)
+        B_params.add(f'g{i}_sigma', value=sigma_value)
+
+    print(f"Fitting B-terms with initial guesses: {B_params}...")
+    B_result = B_model.fit(z, B_params, x=x)
+
+    impactful_gaussian_B = remove_least_impactful_gaussians_by_fit(
+        x, z, B_result, len(remaining_indices), rss_threshold_percent=THRESHOLD_PERCENT)
+    print(f"Least impactful Gaussians are: {impactful_gaussian_B}")
+
+    impactful_gaussian_B_indices = [i for i, _ in impactful_gaussian_B]
+    reduced_B_model = None
+    reduced_B_params = lmfit.Parameters()
+    remaining_B_indices = [i for i in remaining_indices if i not in impactful_gaussian_B_indices]
+
+    for i in remaining_B_indices:
+        g = CustomGaussianModel(prefix=f'g{i}_')
+        if reduced_B_model is None:
+            reduced_B_model = g
+        else:
+            reduced_B_model = reduced_B_model + g
+
+        B_center_value = B_result.params[f'g{i}_center'].value
+        B_amplitude_value = B_result.params[f'g{i}_amplitude'].value
+        B_sigma_value = B_result.params[f'g{i}_sigma'].value
+
+        reduced_B_params.add(f'g{i}_center', value=B_center_value, vary=VARY_CENTERS,
+                             min=B_center_value - (B_center_value * PERCENTAGE_RANGE / 100),
+                             max=B_center_value + (B_center_value * PERCENTAGE_RANGE / 100))
+        reduced_B_params.add(f'g{i}_amplitude', value=B_amplitude_value,
+                             min=B_amplitude_value - (B_amplitude_value * PERCENTAGE_RANGE / 100),
+                             max=B_amplitude_value + (B_amplitude_value * PERCENTAGE_RANGE / 100))
+        reduced_B_params.add(f'g{i}_sigma', value=B_sigma_value,
+                             min=B_sigma_value - (B_sigma_value * PERCENTAGE_RANGE / 100),
+                             max=B_sigma_value + (B_sigma_value * PERCENTAGE_RANGE / 100))
+
+    reduced_B_result = reduced_B_model.fit(z, reduced_B_params, x=x)
+    dplt.plot_fit_with_residuals(x, z, reduced_B_result.best_fit, title="Reduced B-Term Fit with Residuals")
+
+    return reduced_B_result
+#TODO: redo docs
+def iterate_and_fit_gaussians(x, y, z, mcd_df, max_basis_gaussians=MAX_BASIS_GAUSSIANS, num_guesses=NUM_GUESSES):
     avg_bic_values = []
     avg_delta_bic_values = []
-    all_fits = []  # To store all iterations of N-1 fits
+    all_fits = []
 
     amplitudes, centers, sigmas = generate_initial_guesses(x, y, max_basis_gaussians)
-    previous_bic = None  # Make sure that this initilizes to None so that we dont have memory issues.
-
-    #UNUSED
-    #lowest_delta_bic = float('inf')  # Initialize to a large value
-    #lowest_delta_bic_idx = -1  # Index for N with lowest delta BIC - here we are going to lowest bic then going back one step?
-
+    previous_bic = None
     lowest_bic = float('inf')
-    lowest_bic_idx = -1  # Index for N with lowest delta BIC - not exactly sure here?
+    lowest_bic_idx = -1
 
-    # Fit Gaussians for different numbers of basis functions
-    # for num_basis in range(1, max_basis_gaussians + 1):
-    # but cant fit more curves than we have guesses.
-    fits = []
-    #Center length is zero
     for num_basis in range(1, len(centers) + 1):
         bic_list = []
         fits = []
 
-        # Try multiple guesses -
         for guess in range(num_guesses):
-            #print(sigmas[:num_basis])
-            result, model = fit_gaussians(x, y, num_basis, amplitudes[:num_basis], centers[:num_basis],sigmas[:num_basis])
-            #rss = np.sum((y - result.best_fit) ** 2)
-            # num_params = 3 * num_basis # because we have mu, gamma, amp? was used to calc bic but dont need
+            result, model = fit_gaussians(x, y, num_basis, amplitudes[:num_basis], centers[:num_basis], sigmas[:num_basis])
             bic = result.bic
             print(f'result.bic:{bic}')
             bic_list.append(bic)
             fits.append(result)
 
-        avg_bic = np.mean(bic_list)  # because I assume I am taking multiple guesses - but I have been limiting number of guesses to 1 so the average of 1 number is itself.
+        avg_bic = np.mean(bic_list)
         avg_bic_values.append(avg_bic)
-        # Calculate delta BIC
+
         if previous_bic is not None:
-            delta_bic = avg_bic - previous_bic  # This is not delta bic by itself... ?
+            delta_bic = avg_bic - previous_bic
             avg_delta_bic_values.append(delta_bic)
             print(f'num_basis: {num_basis} | avg BIC = {avg_bic} | delta BIC: {delta_bic}')
 
-            # Check for lowest BIC value
             if avg_bic < lowest_bic:
                 lowest_bic = avg_bic
                 lowest_bic_idx = num_basis
 
-            # Early stop if delta BIC is below threshold
             if abs(delta_bic) < DELTA_BIC_THRESHOLD:
                 print(f"Delta BIC ~ 0 at N = {num_basis}. Reporting fits at N-1 = {num_basis - 1}.")
                 all_fits = fits
@@ -435,7 +470,6 @@ def iterate_and_fit_gaussians(x, y, z, mcd_df, max_basis_gaussians=MAX_BASIS_GAU
 
         previous_bic = avg_bic
 
-    # If no early stop occurred, return the fit with the lowest BIC
     if not all_fits:
         if lowest_bic_idx > 1:
             print(f"Returning the N = {lowest_bic_idx} basis functions fit where BIC was minimized.")
@@ -443,67 +477,30 @@ def iterate_and_fit_gaussians(x, y, z, mcd_df, max_basis_gaussians=MAX_BASIS_GAU
         else:
             num_basis = 1
         all_fits = fits
-    # Plot all iterations of the fits with N Gaussians, including true Gaussians. bookmark here
-    dplt.plot_gaussian_iterations(x,y,all_fits, num_basis, lowest_bic_idx)
 
-    # Identify the least impactful Gaussians and remove them
-    #float is being truncated by converting to int. needs to be int
+    dplt.plot_gaussian_iterations(x, y, all_fits, num_basis, lowest_bic_idx)
+
     impactful_gaussians = remove_least_impactful_gaussians_by_fit(x, y, all_fits[-1], num_basis)
     print(f"Least impactful Gaussians are: {impactful_gaussians}")
-
-    # Extract indices of least impactful Gaussians
     impactful_gaussian_indices = [i for i, _ in impactful_gaussians]
 
-    # Re-fit the model without the least impactful Gaussians
     print(f"Re-fitting after removing Gaussians: {impactful_gaussian_indices}...")
-    reduced_model = None
-    reduced_params = lmfit.Parameters()
 
-    # Build the model excluding the least impactful Gaussians
-    for i in range(num_basis):
-        if i in impactful_gaussian_indices:
-            continue  # Skip the least impactful Gaussians
-
-        g = CustomGaussianModel(prefix=f'g{i}_')  # did this change anything by chaning away from default?
-        if reduced_model is None:
-            reduced_model = g
-        else:
-            reduced_model = reduced_model + g
-
-        # Get current parameter values
-        center_value = result.params[f'g{i}_center'].value
-        amplitude_value = result.params[f'g{i}_amplitude'].value
-        sigma_value = result.params[f'g{i}_sigma'].value
-
-        # Set new parameter with bounds ±10% - this gives us the ability to "anneal" the fit, relax params - EVEN WHEN NO CURVES ARE REMOVED.
-        reduced_params.add(f'g{i}_center', value=center_value,
-                           min=center_value - (center_value * PERCENT_RANGE_X / 100),
-                           max=center_value + (center_value * PERCENT_RANGE_X / 100))
-
-        reduced_params.add(f'g{i}_amplitude', value=amplitude_value,
-                           min=amplitude_value - (amplitude_value * PERCENTAGE_RANGE / 100),
-                           max=amplitude_value + (amplitude_value * PERCENTAGE_RANGE / 100))
-
-        reduced_params.add(f'g{i}_sigma', value=sigma_value,
-                           min=sigma_value - (sigma_value * PERCENTAGE_RANGE / 100),
-                           max=sigma_value + (sigma_value * PERCENTAGE_RANGE / 100))
-
-    # Perform the fit again after removing the least impactful Gaussians
-    reduced_result = reduced_model.fit(y, reduced_params, x=x, nan_policy='omit')
+    reduced_result = fit_gaussians_to_signal_reduced_result(
+        x, y, all_fits[-1], CustomGaussianModel,
+        VARY_CENTERS=VARY_CENTERS,
+        PERCENTAGE_RANGE=PERCENTAGE_RANGE,
+        THRESHOLD_PERCENT=THRESHOLD_PERCENT
+    )
 
     dplt.plot_reduced_result(x, y, num_basis, reduced_result, impactful_gaussian_indices)
-
     dplt.plot_bic(avg_bic_values, avg_delta_bic_values)
 
-    ### Use fit values as initial guesses for A term fitting. ###
+    remaining_indices = [i for i in range(num_basis) if i not in impactful_gaussian_indices]
 
     A_model = None
     A_params = lmfit.Parameters()
 
-    # Use only the indices of the Gaussians that were not removed
-    remaining_indices = [i for i in range(num_basis) if i not in impactful_gaussian_indices]
-
-    # for i in range(num_basis): # no longer
     for i in remaining_indices:
         g = CustomGaussian_ddx_Model(prefix=f'g{i}_')
         if A_model is None:
@@ -512,104 +509,120 @@ def iterate_and_fit_gaussians(x, y, z, mcd_df, max_basis_gaussians=MAX_BASIS_GAU
             A_model = A_model + g
         A_params.update(g.make_params())
 
-        # Get current parameter values
         center_value = reduced_result.params[f'g{i}_center'].value
         amplitude_value = reduced_result.params[f'g{i}_amplitude'].value
         sigma_value = reduced_result.params[f'g{i}_sigma'].value
 
-        A_params.add(f'g{i}_center', value=center_value,
-                     vary=VARY_CENTERS)  # , min=centers[i] - (centers[i] * PERCENTAGE_RANGE / 100), max=centers[i] + (centers[i] * PERCENTAGE_RANGE / 100), vary=True)  # Set bounds for center
-        A_params.add(f'g{i}_amplitude',
-                     value=amplitude_value)  # min=amplitudes[i] - (amplitudes[i] * PERCENTAGE_RANGE), max=amplitudes[i] + (amplitudes[i] * PERCENTAGE_RANGE))           # Amplitude must be positive
+        A_params.add(f'g{i}_center', value=center_value, vary=VARY_CENTERS)
+        A_params.add(f'g{i}_amplitude', value=amplitude_value)
         A_params.add(f'g{i}_sigma', value=sigma_value, max=MAX_SIGMA)
-
-        # Set new parameter with bounds ±10% - this gives us the ability to "anneal" the fit, relax params - EVEN WHEN NO CURVES ARE REMOVED.
-        # params.add(f'g{i}_center', value=centers[i],
-        #                   min=centers[i] - (centers[i] * PERCENTAGE_RANGE / 100),
-        #                   max=centers[i] + (centers[i] * PERCENTAGE_RANGE / 100),
-        #                   vary=False)
-
-        # params.add(f'g{i}_amplitude', value=amplitudes[i],
-        #                   min=amplitudes[i] - (amplitudes[i] * PERCENTAGE_RANGE / 100),
-        #                   max=amplitudes[i] + (amplitudes[i] * PERCENTAGE_RANGE / 100))
-
-        # params.add(f'g{i}_sigma', value=sigmas[i],
-        #                   min=sigmas[i] - (sigmas[i] * PERCENTAGE_RANGE / 100),
-        #                   max=sigmas[i] + (sigmas[i] * PERCENTAGE_RANGE / 100))
 
     A_result = A_model.fit(z, A_params, x=x, nan_policy='omit')
     dplt.plot_A_terms(x, z, A_result, remaining_indices)
 
-    ## Remove the least impactful A-term fits. If buggy, may have to use different variable names.
-
-    # Identify the least impactful Gaussians and remove them
-    impactful_gaussian_derivatives = remove_least_impactful_gaussian_derivatives_by_fit(x, z, A_result, len(remaining_indices),rss_threshold_percent=THRESHOLD_PERCENT)
+    impactful_gaussian_derivatives = remove_least_impactful_gaussian_derivatives_by_fit(
+        x, z, A_result, len(remaining_indices), rss_threshold_percent=THRESHOLD_PERCENT)
     print(f"Least impactful Gaussians are: {impactful_gaussian_derivatives}")
-
-    # Extract indices of least impactful Gaussians
     impactful_gaussian_derivative_indices = [i for i, _ in impactful_gaussian_derivatives]
 
-    # Re-fit the model without the least impactful Gaussians
     print(f"Re-fitting after removing Gaussians: {impactful_gaussian_derivative_indices}...")
-    reduced_derivative_model = None
-    reduced_derivative_params = lmfit.Parameters()
+    reduced_A_result = fit_gaussians_to_signal_reduced_result(
+        x, z, A_result, CustomGaussian_ddx_Model,
+        VARY_CENTERS=VARY_CENTERS,
+        PERCENTAGE_RANGE=PERCENTAGE_RANGE,
+        THRESHOLD_PERCENT=THRESHOLD_PERCENT
+    )
 
-    remaining_derivative_indices = [i for i in remaining_indices if i not in impactful_gaussian_derivative_indices]
+    dplt.plot_xz_after_gaussian_removal(
+        x, z, reduced_A_result,
+        [i for i in remaining_indices if i not in impactful_gaussian_derivative_indices],
+        impactful_gaussian_derivative_indices
+    )
 
-    # Build the model excluding the least impactful Gaussians
-    for i in remaining_derivative_indices:
-        # if i in impactful_gaussian_derivative_indices: # dont need this anymore
-        #    continue  # Skip the least impactful Gaussians
+    ##############################################################################################################################
 
-        g = CustomGaussian_ddx_Model(prefix=f'g{i}_')  # need to change to gaussian derivative
-        if reduced_derivative_model is None:
-            reduced_derivative_model = g
-        else:
-            reduced_derivative_model = reduced_derivative_model + g
+    remaining_indices = [i for i in range(num_basis) if i not in impactful_gaussian_indices]
+    z_minus_A = z - reduced_A_result.best_fit
 
-        # Get current parameter values
-        derivative_center_value = A_result.params[f'g{i}_center'].value
-        derivative_amplitude_value = A_result.params[f'g{i}_amplitude'].value
-        derivative_sigma_value = A_result.params[f'g{i}_sigma'].value
+    z_pos = z_minus_A[z > 0]
+    x_pos = x[z > 0]
 
-        # Set new parameter with bounds ±10% - this gives us the ability to "anneal" the fit, relax params - EVEN WHEN NO CURVES ARE REMOVED.
-        reduced_derivative_params.add(f'g{i}_center', value=derivative_center_value, vary=VARY_CENTERS,
-                                      min=derivative_center_value - (derivative_center_value * PERCENTAGE_RANGE / 100),
-                                      max=derivative_center_value + (derivative_center_value * PERCENTAGE_RANGE / 100))
+    z_neg = z_minus_A[z < 0]
+    x_neg = x[z < 0]
 
-        reduced_derivative_params.add(f'g{i}_amplitude', value=derivative_amplitude_value,
-                                      min=derivative_amplitude_value - (
-                                              derivative_amplitude_value * PERCENTAGE_RANGE / 100),
-                                      max=derivative_amplitude_value + (
-                                              derivative_amplitude_value * PERCENTAGE_RANGE / 100))
+    reduced_B_result_pos = fit_gaussians_to_signal_reduced_result(
+        x_pos, z_pos, reduced_result, CustomGaussianModel,
+        VARY_CENTERS=VARY_CENTERS,
+        PERCENTAGE_RANGE=PERCENTAGE_RANGE,
+        THRESHOLD_PERCENT=THRESHOLD_PERCENT
+    )
 
-        reduced_derivative_params.add(f'g{i}_sigma', value=derivative_sigma_value,
-                                      min=derivative_sigma_value - (derivative_sigma_value * PERCENTAGE_RANGE / 100),
-                                      max=derivative_sigma_value + (derivative_sigma_value * PERCENTAGE_RANGE / 100))
+    reduced_B_result_neg = fit_gaussians_to_signal_reduced_result(
+        x_neg, z_neg, reduced_result, CustomGaussianModel,
+        VARY_CENTERS=VARY_CENTERS,
+        PERCENTAGE_RANGE=PERCENTAGE_RANGE,
+        THRESHOLD_PERCENT=THRESHOLD_PERCENT
+    )
 
-    # Perform the fit again after removing the least impactful Gaussians
-    reduced_A_result = reduced_derivative_model.fit(z, reduced_derivative_params, x=x, nan_policy='omit')
-    #plot
-    dplt.plot_xz_after_gaussian_removal(x,z,reduced_A_result, remaining_derivative_indices, impactful_gaussian_derivative_indices)
+    combined_B_fit = np.zeros_like(z)
+    combined_B_fit[z > 0] = reduced_B_result_pos.best_fit
+    combined_B_fit[z < 0] = reduced_B_result_neg.best_fit
+
+    # Add A-terms back in to reconstruct full modeled signal
+    final_fit = reduced_A_result.best_fit + combined_B_fit
+
+    # Wrap in a combined result object for plotting and inspection
+    class CombinedResult:
+        def __init__(self, best_fit, A_result, B_result):
+            self.best_fit = best_fit
+            self.A_result = A_result
+            self.B_result = B_result
+
+    reduced_AB_result = CombinedResult(final_fit, reduced_A_result, reduced_B_result_pos)
+
+    # Plot original z vs combined A+B model
+    dplt.plot_final_model(x, z, reduced_AB_result.best_fit)
+
+    ##############################################################################################################################
 
     # Report the parameters of interest.
-    print(f'A-Term Parameters: {reduced_A_result.params}')
-    print(f'Electronic Dipole Parameters: {reduced_result.params}')
+    print("\n========= A-Term Parameters (Derivatives) =========")
+    for name, param in reduced_A_result.params.items():
+        if param.stderr is not None:
+            print(f"{name}: {param.value:.5g} ± {param.stderr:.2g}")
+        else:
+            print(f"{name}: {param.value:.5g}")
 
-    # Extract parameters from the reduced_A_result and reduced_result
+    print("\n========= B-Term Parameters =========")
+    if hasattr(reduced_B_result_pos, 'params'):
+        for name, param in reduced_B_result_pos.params.items():
+            if param.stderr is not None:
+                print(f"{name}: {param.value:.5g} ± {param.stderr:.2g}")
+            else:
+                print(f"{name}: {param.value:.5g}")
+    else:
+        print("B-term result has no parameters.")
+
+    print("\n========= Dipole Parameters (Raw fit before A/B separation) =========")
+    for name, param in reduced_result.params.items():
+        if param.stderr is not None:
+            print(f"{name}: {param.value:.5g} ± {param.stderr:.2g}")
+        else:
+            print(f"{name}: {param.value:.5g}")
+
+    # Extract parameters from A and dipole fits
     aterm_params = reduced_A_result.params
     dipole_params = reduced_result.params
 
     # Pass the x-values (wavenumbers) to calculate the range
     x_values = mcd_df['wavenumber'].values
 
-    # Group centers and calculate A/D ratio, using a percentage of the total x range for tolerance
+    # Group centers and calculate A/D ratio
     grouped_data = group_centers(dipole_params, aterm_params, x_values, tolerance_percentage=TOLERANCE_X)
 
-    # Create a DataFrame to display the result
+    # Create and display result table
     df = pd.DataFrame(grouped_data)
-
-    # Display the formatted table
+    print("\n========= Grouped A/D Fit Table =========")
     print(df)
 
     return df

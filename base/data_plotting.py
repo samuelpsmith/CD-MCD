@@ -16,6 +16,46 @@ logging = logger.get_logger(__name__)
 #        pandas.DataFrame sticks_df: dataframe for the stick data
 #Returns: Void
 #Does: Plots the processed data
+
+def plot_fit_with_residuals(x, z, fit, title="Fit with Residuals"):
+    import matplotlib.pyplot as plt
+
+    residuals = z - fit
+
+    plt.figure(figsize=(12, 6))
+
+    # Plot original signal and fit
+    plt.subplot(2, 1, 1)
+    plt.plot(x, z, label='Original Signal', color='black')
+    plt.plot(x, fit, label='Fit', linestyle='--', color='blue')
+    plt.title(title)
+    plt.legend()
+    plt.grid(True)
+
+    # Plot residuals
+    plt.subplot(2, 1, 2)
+    plt.plot(x, residuals, label='Residuals', color='gray')
+    plt.axhline(0, color='red', linestyle='--')
+    plt.title('Residuals')
+    plt.xlabel('x')
+    plt.ylabel('Residual')
+    plt.legend()
+    plt.grid(True)
+
+    plt.tight_layout()
+    plt.show()
+
+def plot_final_model(x, z, model_fit):
+    plt.figure(figsize=(10, 4))
+    plt.plot(x, z, label='Original z', alpha=0.5)
+    plt.plot(x, model_fit, label='Final Model (A + B)', linewidth=2)
+    plt.xlabel('x')
+    plt.ylabel('Signal')
+    plt.title('Final Combined Fit: A + B Terms')
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
 def plot_data_old(
         base_name: str,
         mcd_df: pd.DataFrame,
