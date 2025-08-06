@@ -1,6 +1,8 @@
 #
 # Module to hold all methods related to data fitting
 #
+import re
+
 import scipy.signal
 from lmfit.models import GaussianModel
 import lmfit
@@ -374,7 +376,11 @@ def fit_gaussians_to_signal_reduced_result(x, z, reduced_result, CustomGaussianM
     B_model = None
     B_params = lmfit.Parameters()
 
-    remaining_indices = [i for i in range(len(reduced_result.params) // 3) if f'g{i}_center' in reduced_result.params]
+    remaining_indices = sorted({
+        int(match.group(1))
+        for name in reduced_result.params
+        if (match := re.match(r"g(\d+)_center", name))
+    })
 
     for i in remaining_indices:
         g = CustomGaussianModel(prefix=f'g{i}_')
