@@ -18,8 +18,6 @@ logging = logger.get_logger(__name__)
 #Does: Plots the processed data
 
 def plot_fit_with_residuals(x, z, fit, title="Fit with Residuals"):
-    import matplotlib.pyplot as plt
-
     residuals = z - fit
 
     plt.figure(figsize=(12, 6))

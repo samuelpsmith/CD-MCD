@@ -373,8 +373,8 @@ def filter_peaks_deltax(x, peaks):
 
 #TODO: documentation
 def fit_gaussians_to_signal_reduced_result(x, z, reduced_result, CustomGaussianModel, VARY_CENTERS=True, PERCENTAGE_RANGE=10, THRESHOLD_PERCENT=RSS_THRESHOLD_PERCENT, PLOT = True):
-    B_model = None
-    B_params = lmfit.Parameters()
+    model = None
+    params = lmfit.Parameters()
 
     remaining_indices = sorted({
         int(match.group(1))
@@ -384,58 +384,58 @@ def fit_gaussians_to_signal_reduced_result(x, z, reduced_result, CustomGaussianM
 
     for i in remaining_indices:
         g = CustomGaussianModel(prefix=f'g{i}_')
-        if B_model is None:
-            B_model = g
+        if model is None:
+            model = g
         else:
-            B_model = B_model + g
-        B_params.update(g.make_params())
+            model = model + g
+        params.update(g.make_params())
 
         center_value = reduced_result.params[f'g{i}_center'].value
         amplitude_value = reduced_result.params[f'g{i}_amplitude'].value
         sigma_value = reduced_result.params[f'g{i}_sigma'].value
 
-        B_params.add(f'g{i}_center', value=center_value, vary=VARY_CENTERS)
-        B_params.add(f'g{i}_amplitude', value=amplitude_value)
-        B_params.add(f'g{i}_sigma', value=sigma_value)
+        params.add(f'g{i}_center', value=center_value, vary=VARY_CENTERS)
+        params.add(f'g{i}_amplitude', value=amplitude_value)
+        params.add(f'g{i}_sigma', value=sigma_value)
 
-    print(f"Fitting B-terms with initial guesses: {B_params}...")
-    B_result = B_model.fit(z, B_params, x=x)
+    print(f"Fitting B-terms with initial guesses: {params}...")
+    result = model.fit(z, params, x=x)
 
-    impactful_gaussian_B = remove_least_impactful_gaussians_by_fit(
-        x, z, B_result, len(remaining_indices), rss_threshold_percent=THRESHOLD_PERCENT)
-    print(f"Least impactful Gaussians are: {impactful_gaussian_B}")
+    impactful_gaussians = remove_least_impactful_gaussians_by_fit(
+        x, z, result, len(remaining_indices), rss_threshold_percent=THRESHOLD_PERCENT)
+    print(f"Least impactful Gaussians are: {impactful_gaussians}")
 
-    impactful_gaussian_B_indices = [i for i, _ in impactful_gaussian_B]
-    reduced_B_model = None
-    reduced_B_params = lmfit.Parameters()
-    remaining_B_indices = [i for i in remaining_indices if i not in impactful_gaussian_B_indices]
+    impactful_gaussian_indices = [i for i, _ in impactful_gaussians]
+    reduced_model = None
+    reduced_params = lmfit.Parameters()
+    remaining_indices = [i for i in remaining_indices if i not in impactful_gaussian_indices]
 
-    print(f"rem ind {remaining_B_indices}")
-    for i in remaining_B_indices:
+    print(f"rem ind {remaining_indices}")
+    for i in remaining_indices:
         g = CustomGaussianModel(prefix=f'g{i}_')
-        if reduced_B_model is None:
-            reduced_B_model = g
+        if reduced_model is None:
+            reduced_model = g
         else:
-            reduced_B_model = reduced_B_model + g
+            reduced_model = reduced_model + g
 
-        B_center_value = B_result.params[f'g{i}_center'].value
-        B_amplitude_value = B_result.params[f'g{i}_amplitude'].value
-        B_sigma_value = B_result.params[f'g{i}_sigma'].value
+        B_center_value = result.params[f'g{i}_center'].value
+        B_amplitude_value = result.params[f'g{i}_amplitude'].value
+        B_sigma_value = result.params[f'g{i}_sigma'].value
 
-        reduced_B_params.add(f'g{i}_center', value=B_center_value, vary=VARY_CENTERS,
+        reduced_params.add(f'g{i}_center', value=B_center_value, vary=VARY_CENTERS,
                              min=B_center_value - (B_center_value * PERCENTAGE_RANGE / 100),
                              max=B_center_value + (B_center_value * PERCENTAGE_RANGE / 100))
-        reduced_B_params.add(f'g{i}_amplitude', value=B_amplitude_value,
+        reduced_params.add(f'g{i}_amplitude', value=B_amplitude_value,
                              min=B_amplitude_value - (B_amplitude_value * PERCENTAGE_RANGE / 100),
                              max=B_amplitude_value + (B_amplitude_value * PERCENTAGE_RANGE / 100))
-        reduced_B_params.add(f'g{i}_sigma', value=B_sigma_value,
+        reduced_params.add(f'g{i}_sigma', value=B_sigma_value,
                              min=B_sigma_value - (B_sigma_value * PERCENTAGE_RANGE / 100),
                              max=B_sigma_value + (B_sigma_value * PERCENTAGE_RANGE / 100))
 
-    reduced_B_result = reduced_B_model.fit(z, reduced_B_params, x=x)
-    if PLOT: dplt.plot_fit_with_residuals(x, z, reduced_B_result.best_fit, title="Reduced B-Term Fit with Residuals")
+    reduced_result = reduced_model.fit(z, reduced_params, x=x)
+    if PLOT: dplt.plot_fit_with_residuals(x, z, reduced_result.best_fit, title="Reduced B-Term Fit with Residuals")
 
-    return reduced_B_result
+    return reduced_result
 #TODO: redo docs
 def iterate_and_fit_gaussians(x, y, z, mcd_df, max_basis_gaussians=MAX_BASIS_GAUSSIANS, num_guesses=NUM_GUESSES):
     avg_bic_values = []
@@ -497,7 +497,8 @@ def iterate_and_fit_gaussians(x, y, z, mcd_df, max_basis_gaussians=MAX_BASIS_GAU
         x, y, all_fits[-1], CustomGaussianModel,
         VARY_CENTERS=VARY_CENTERS,
         PERCENTAGE_RANGE=PERCENTAGE_RANGE,
-        THRESHOLD_PERCENT=THRESHOLD_PERCENT
+        THRESHOLD_PERCENT=THRESHOLD_PERCENT,
+        PLOT = False
     )
 
     dplt.plot_reduced_result(x, y, num_basis, reduced_result, impactful_gaussian_indices)
@@ -537,7 +538,8 @@ def iterate_and_fit_gaussians(x, y, z, mcd_df, max_basis_gaussians=MAX_BASIS_GAU
         x, z, A_result, CustomGaussian_ddx_Model,
         VARY_CENTERS=VARY_CENTERS,
         PERCENTAGE_RANGE=PERCENTAGE_RANGE,
-        THRESHOLD_PERCENT=THRESHOLD_PERCENT
+        THRESHOLD_PERCENT=THRESHOLD_PERCENT,
+        PLOT = False
     )
 
     dplt.plot_xz_after_gaussian_removal(
