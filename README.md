@@ -167,3 +167,12 @@ Copyright (C) 2024 Samuel Smith
 For any further questions or issues, please contact Sam Smith ssmith43@unm.edu
 
 
+
+## Instrument acquisition
+
+The LabVIEW-to-Python CD/MCD acquisition application lives in
+[instrument_acquisition/](instrument_acquisition/README.md), separately from
+the post-processing scripts above. It controls the Zurich MFLI, CM110, and
+PEM100 and produces X/Y/AVG/notes files, with optional separate intensity files.
+See the [acquisition quickstart](instrument_acquisition/QUICKSTART.md) for setup
+and launch instructions. Run acquisition commands from that folder.

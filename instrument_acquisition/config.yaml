@@ -1,0 +1,63 @@
+zurich:
+  host: "localhost"
+  port: 8004
+  api_level: 6
+  device_id: "DEV4388"
+  connection: "ethernet"
+  interface: "1GbE"
+  demod_index: 0
+  sample_node: "/dev4388/demods/0/sample"
+  alternate_sample_node: "/dev4388/demods/1/sample"
+  reference_aux_channel: "auxin0"
+  poll_timeout_ms: 5
+  settings:
+    extrefs_0_enable: 1
+    demods_0_harmonic: 1
+    demods_0_timeconstant: 0.1
+    demods_0_order: 3
+    demods_0_sinc: 0
+    sigins_0_range: 1
+    sigins_0_ac: 1
+    demods_0_adcselect: 0
+    demods_0_rate: 30
+    triggers_in_0_level: 0.3
+
+cm110:
+  port: "COM4"
+  baudrate: 9600
+  bytesize: 8
+  parity: "N"
+  stopbits: 1
+  timeout_s: 10
+
+pem:
+  port: "COM1"
+  baudrate: 2400
+  bytesize: 8
+  parity: "N"
+  stopbits: 1
+  timeout_s: 2
+  retardation_waves: 0.250
+  terminator: "\r"
+
+scan_defaults:
+  base_name: "test"
+  scan_type: "pos"
+  start_nm: 400
+  end_nm: 450
+  step_nm: 2
+  points: 100
+  number_of_points: 100
+  settle_time_s: 2
+  standard_deviation_ddof: 1
+  sr830_sensitivity_v: 0.1
+  b_field_t: 1.0
+  path_length_m: 0.002
+  output_dir: "data"
+  experiment_note: ""
+
+absorption:
+  enabled_default: false
+  intensity_channel: "auxin0"
+  output_raw_intensity: true
+  output_average_intensity: true
