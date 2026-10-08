@@ -176,3 +176,30 @@ the post-processing scripts above. It controls the Zurich MFLI, CM110, and
 PEM100 and produces X/Y/AVG/notes files, with optional separate intensity files.
 See the [acquisition quickstart](instrument_acquisition/QUICKSTART.md) for setup
 and launch instructions. Run acquisition commands from that folder.
+
+## bruteFit spectroscopy fitting
+
+[bruteFit/](bruteFit/README.md) contains the ABS/MCD processing GUI, transition-aware
+A/B/D fitting, saved fit sessions, and batch exports. Run its commands from that
+directory, using its own dependencies:
+
+```bash
+cd bruteFit
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python main.py
+```
+
+See the [bruteFit guide](bruteFit/README.md) for batch processing and
+[scientific conventions](bruteFit/docs/SCIENTIFIC_CONVENTIONS.md) for units,
+normalization, signs, and harmonic correction.
+
+The directory is a Git subtree imported from
+[lindu88/bruteFit](https://github.com/lindu88/bruteFit), revision `2c2ca64`.
+Updates are explicit; this copy does not automatically follow the source repository.
+Maintainers can bring in future source updates from the CD-MCD repository root:
+
+```bash
+git subtree pull --prefix=bruteFit https://github.com/lindu88/bruteFit.git master --squash
+```
